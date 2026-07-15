@@ -33,6 +33,23 @@ def _sdf_globals() -> dict[str, Any]:
         import numpy as _np  # type: ignore
     except ImportError as e:
         raise RuntimeError(f"sdf/numpy not installed: {e}")
+    # sdf.core uses multiprocessing.pool.ThreadPool, which spawns a
+    # resource-tracker subprocess. That breaks inside long-running host
+    # processes with inherited/closed FDs ("bad value(s) in fds_to_keep").
+    # Swap in a pure-threading executor — same API surface, no subprocess.
+    try:
+        import sdf.core as _score
+        from concurrent.futures import ThreadPoolExecutor as _TPE
+        class _NoMPThreadPool:
+            def __init__(self, workers):
+                self._ex = _TPE(max_workers=max(1, int(workers)))
+            def imap(self, fn, iterable):
+                return self._ex.map(fn, iterable)
+            def __getattr__(self, name):
+                return getattr(self._ex, name)
+        _score.ThreadPool = _NoMPThreadPool
+    except Exception:
+        pass
     g: dict[str, Any] = {"__builtins__": {}}
     # Expose every non-private sdf name
     for name in dir(_sdf):
