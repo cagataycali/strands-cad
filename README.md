@@ -1,5 +1,9 @@
 # 🔧 strands-cad
 
+[![PyPI version](https://badge.fury.io/py/strands-cad.svg)](https://pypi.org/project/strands-cad/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **Atomic CAD, mesh, SDF, cadquery, neural & print tools for [Strands](https://github.com/strands-agents) agents.**
 
 Four independent paths to a printable 3D asset:
@@ -19,12 +23,23 @@ All roads lead to STL → 3MF → Bambu Lab.
 pip install strands-cad
 ```
 
-Everything is a hard dependency — no extras needed. Includes:
-`trimesh, sdf (fogleman), cadquery, shap-e, torch, scikit-image, fast-simplification, mujoco, paho-mqtt, scipy, numpy, meshio`.
+Core includes: `trimesh, cadquery, torch, scipy, scikit-image, mujoco, paho-mqtt, fast-simplification, meshio, numpy`.
 
-**External** (system):
-- `openscad` for `scad_*` tools (`brew install openscad`)
-- `bambu-studio` for `slice_bambu` (bambulab.com)
+### Optional git-only extras
+
+PyPI disallows direct git URLs, so two libraries install separately:
+
+```bash
+python -m strands_cad.install_extras            # both
+# OR selective:
+python -m strands_cad.install_extras sdf        # fogleman/sdf → sdf_render_stl
+python -m strands_cad.install_extras neural     # openai/shap-e → neural_text_to_stl
+```
+
+### External system tools
+
+- `openscad` for `scad_*` tools — `brew install openscad`
+- `bambu-studio` for `slice_bambu` — download from bambulab.com
 
 ## The 51 Atomic Tools
 

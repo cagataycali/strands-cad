@@ -5,12 +5,24 @@ build-backend = "hatchling.build"
 [project]
 name = "strands-cad"
 version = "0.3.0"
-description = "🔧 Atomic CAD, mesh, SDF, cadquery, neural & print tools for Strands agents"
+description = "🔧 Atomic CAD, mesh, SDF, cadquery, neural & print tools for Strands agents — prompt-to-print pipeline"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Cagatay Cali" }]
 keywords = ["3d", "cad", "openscad", "cadquery", "sdf", "shap-e", "3d-printing", "bambu", "mesh", "stl", "3mf", "strands", "agents"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Graphics :: 3D Modeling",
+    "Topic :: Scientific/Engineering",
+]
 
 dependencies = [
     "strands-agents>=0.1.0",
@@ -20,12 +32,9 @@ dependencies = [
     "trimesh>=4.0",
     "scikit-image>=0.22",
     "fast-simplification>=0.1",
-    # SDF (fogleman/sdf) — implicit math → mesh
-    "sdf @ git+https://github.com/fogleman/sdf.git",
     # Real CAD (B-rep / NURBS)
     "cadquery>=2.5",
-    # Neural (text/image → 3D)
-    "shap-e @ git+https://github.com/openai/shap-e.git",
+    # Neural helpers (Shap-E installed separately from git — see README)
     "torch>=2.0",
     "torchvision>=0.15",
     "ipywidgets>=8.0",
@@ -39,15 +48,20 @@ dependencies = [
     "meshio>=5.0",
 ]
 
+# NOTE: `sdf` (fogleman) and `shap-e` (openai) are only on GitHub —
+# PyPI disallows direct git URLs, so users install them separately:
+#   pip install strands-cad
+#   pip install git+https://github.com/fogleman/sdf.git       # for SDF tools
+#   pip install git+https://github.com/openai/shap-e.git      # for neural tools
+# Or use the post-install helper: `python -m strands_cad.install_extras`
+
 [project.optional-dependencies]
-dev  = ["pytest>=8.0", "pytest-cov"]
+dev = ["pytest>=8.0", "pytest-cov", "build", "twine"]
 
 [project.urls]
-Homepage = "https://github.com/cagataycali/strands-cad"
+Homepage   = "https://github.com/cagataycali/strands-cad"
 Repository = "https://github.com/cagataycali/strands-cad"
+Issues     = "https://github.com/cagataycali/strands-cad/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["strands_cad"]
-
-[tool.hatch.metadata]
-allow-direct-references = true
