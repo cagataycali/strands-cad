@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+.DS_Store
+*.stl
+*.3mf
+*.gcode
+*.bgcode
+!examples/*.stl
+!tests/fixtures/*.stl

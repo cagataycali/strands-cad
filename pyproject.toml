@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "strands-cad"
+version = "0.1.0"
+description = "🔧 Atomic CAD, mesh, slice & print tools for Strands agents — prompt-to-print pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Cagatay Cali" }]
+keywords = ["3d", "cad", "openscad", "3d-printing", "bambu", "mesh", "stl", "3mf", "strands", "agents"]
+
+dependencies = [
+    "strands-agents>=0.1.0",
+]
+
+[project.optional-dependencies]
+mesh = ["trimesh>=4.0", "numpy>=1.24"]
+sim  = ["mujoco>=3.0", "numpy>=1.24"]
+bambu = ["paho-mqtt>=2.0", "requests>=2.31"]
+all  = ["strands-cad[mesh,sim,bambu]"]
+dev  = ["pytest>=8.0", "pytest-cov"]
+
+[project.urls]
+Homepage = "https://github.com/cagataycali/strands-cad"
+Repository = "https://github.com/cagataycali/strands-cad"
+
+[tool.hatch.build.targets.wheel]
+packages = ["strands_cad"]
