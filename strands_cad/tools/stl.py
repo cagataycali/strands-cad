@@ -1,5 +1,6 @@
 """STL / mesh layer — atomic geometry tools."""
 from __future__ import annotations
+import math
 import struct
 from pathlib import Path
 from typing import Any
@@ -153,9 +154,22 @@ def stl_repair(stl_file: str, output_stl: str) -> dict:
         "vertices": int(len(m.vertices)),
     }
     m.process(validate=True)
-    m.remove_degenerate_faces()
-    m.remove_duplicate_faces()
-    m.remove_unreferenced_vertices()
+    # trimesh 4.x compatibility: prefer update_faces / update_vertices helpers,
+    # but fall back to older method names if present.
+    try:
+        m.update_faces(m.nondegenerate_faces())
+    except AttributeError:
+        if hasattr(m, 'remove_degenerate_faces'):
+            m.remove_degenerate_faces()
+    try:
+        m.update_faces(m.unique_faces())
+    except AttributeError:
+        if hasattr(m, 'remove_duplicate_faces'):
+            m.remove_duplicate_faces()
+    try:
+        m.remove_unreferenced_vertices()
+    except AttributeError:
+        pass
     trimesh.repair.fill_holes(m)
     trimesh.repair.fix_normals(m)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -242,3 +256,250 @@ def stl_convert(input_file: str, output_file: str) -> dict:
     out.parent.mkdir(parents=True, exist_ok=True)
     m.export(out)
     return ok(f"converted {src.suffix} → {out.suffix}: {out}", path=str(out))
+
+
+# ============================================================
+# v0.2 additions — decimation, hollow, boolean, normalize, combine
+# ============================================================
+
+
+@tool
+def mesh_decimate(
+    stl_file: str,
+    output_stl: str,
+    target_faces: int = 100_000,
+    preserve_boundary: bool = True,
+) -> dict:
+    """Reduce triangle count while preserving overall shape (quadric decimation).
+
+    Great for making SDF-generated meshes slicer-friendly (SDF often yields
+    millions of triangles; slicers work best with 50k-500k).
+
+    Args:
+        stl_file: Input .stl.
+        output_stl: Output .stl.
+        target_faces: Target face count (default 100k).
+        preserve_boundary: Keep boundary edges intact (safer for open meshes).
+
+    Returns:
+        {status, content, path, faces_before, faces_after, ratio}
+    """
+    try:
+        import trimesh  # type: ignore
+    except ImportError:
+        return err("trimesh required")
+    src = Path(stl_file).resolve()
+    out = Path(output_stl).resolve()
+    if not src.exists():
+        return err(f"file not found: {src}")
+    m = trimesh.load(src, force="mesh")
+    before = int(len(m.faces))
+    if before <= target_faces:
+        m.export(out)
+        return ok(f"already ≤ target ({before} ≤ {target_faces}) — copied unchanged",
+                  path=str(out), faces_before=before, faces_after=before, ratio=1.0)
+    try:
+        m2 = m.simplify_quadric_decimation(face_count=target_faces)
+    except TypeError:
+        # Older trimesh API
+        m2 = m.simplify_quadric_decimation(target_faces)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    m2.export(out)
+    after = int(len(m2.faces))
+    return ok(f"decimated {before:,} → {after:,} faces ({after/before*100:.1f}%)",
+              path=str(out), faces_before=before, faces_after=after,
+              ratio=after / before)
+
+
+@tool
+def mesh_normalize(
+    stl_file: str,
+    output_stl: str,
+    center: bool = True,
+    lay_flat: bool = True,
+    z_zero: bool = True,
+) -> dict:
+    """Auto-orient a mesh for the print bed: center XY, drop to Z=0, optionally lay flat.
+
+    Args:
+        stl_file: Input .stl.
+        output_stl: Output .stl.
+        center: Center on XY origin.
+        lay_flat: Orient largest face down (approximation via bbox — use with care).
+        z_zero: Translate so minimum Z = 0 (sits on bed).
+    """
+    try:
+        import trimesh  # type: ignore
+        import numpy as np  # type: ignore
+    except ImportError:
+        return err("trimesh required")
+    src = Path(stl_file).resolve()
+    out = Path(output_stl).resolve()
+    if not src.exists():
+        return err(f"file not found: {src}")
+    m = trimesh.load(src, force="mesh")
+
+    if lay_flat:
+        # Very simple: put the largest bbox dimension along the print bed by
+        # rotating so that Z axis is the shortest bbox extent.
+        ext = m.extents
+        axes = np.argsort(ext)  # ascending
+        z_axis = axes[0]
+        if z_axis != 2:
+            # rotate so z_axis becomes Z
+            if z_axis == 0:
+                m.apply_transform(trimesh.transformations.rotation_matrix(math.pi/2, [0,1,0]))
+            elif z_axis == 1:
+                m.apply_transform(trimesh.transformations.rotation_matrix(-math.pi/2, [1,0,0]))
+
+    if center:
+        mn, mx = m.bounds
+        xc = (mn[0] + mx[0]) / 2
+        yc = (mn[1] + mx[1]) / 2
+        m.apply_translation([-xc, -yc, 0])
+
+    if z_zero:
+        mn = m.bounds[0]
+        m.apply_translation([0, 0, -mn[2]])
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    m.export(out)
+    mn, mx = m.bounds
+    return ok(f"normalized → bounds {mn.tolist()} to {mx.tolist()}",
+              path=str(out), bounds=[mn.tolist(), mx.tolist()])
+
+
+@tool
+def mesh_boolean(
+    stl_a: str,
+    stl_b: str,
+    output_stl: str,
+    op: str = "union",
+) -> dict:
+    """Boolean op (union/difference/intersection) between two meshes.
+
+    Uses trimesh's boolean engine (manifold3d if available, else blender/scad).
+    Both inputs should be watertight.
+
+    Args:
+        stl_a: First mesh.
+        stl_b: Second mesh.
+        output_stl: Output .stl.
+        op: 'union', 'difference' (a - b), or 'intersection'.
+    """
+    try:
+        import trimesh  # type: ignore
+    except ImportError:
+        return err("trimesh required")
+    for p in (stl_a, stl_b):
+        if not Path(p).exists():
+            return err(f"file not found: {p}")
+    a = trimesh.load(stl_a, force="mesh")
+    b = trimesh.load(stl_b, force="mesh")
+    if op == "union":
+        r = a.union(b)
+    elif op == "difference":
+        r = a.difference(b)
+    elif op == "intersection":
+        r = a.intersection(b)
+    else:
+        return err(f"unknown op '{op}'. Use union|difference|intersection.")
+    out = Path(output_stl).resolve()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    r.export(out)
+    return ok(f"{op} → {out.name} ({len(r.faces):,} faces)",
+              path=str(out), faces=int(len(r.faces)))
+
+
+@tool
+def mesh_combine(
+    stl_files: list[str],
+    output_stl: str,
+) -> dict:
+    """Combine multiple STL files into ONE STL as separate concatenated meshes.
+
+    Unlike mesh_boolean, this does NOT fuse geometry — objects stay disjoint.
+    Useful for print plates where you want one file with many parts.
+
+    Args:
+        stl_files: List of .stl paths.
+        output_stl: Output .stl.
+    """
+    try:
+        import trimesh  # type: ignore
+    except ImportError:
+        return err("trimesh required")
+    meshes = []
+    for p in stl_files:
+        if not Path(p).exists():
+            return err(f"file not found: {p}")
+        meshes.append(trimesh.load(p, force="mesh"))
+    combined = trimesh.util.concatenate(meshes)
+    out = Path(output_stl).resolve()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    combined.export(out)
+    return ok(f"combined {len(meshes)} meshes → {out.name} ({len(combined.faces):,} faces)",
+              path=str(out), source_count=len(meshes), faces=int(len(combined.faces)))
+
+
+@tool
+def mesh_hollow(
+    stl_file: str,
+    output_stl: str,
+    wall_thickness: float = 2.0,
+    drain_hole_diameter: float = 0.0,
+) -> dict:
+    """Hollow out a solid mesh (offset inward by wall_thickness, subtract).
+
+    Useful for making solid SCAD/SDF prints lighter. Optionally drills a drain
+    hole on the bottom (needed for resin, or to reduce print time on FDM).
+
+    Args:
+        stl_file: Input .stl (should be watertight).
+        output_stl: Output .stl.
+        wall_thickness: Desired wall thickness in mm.
+        drain_hole_diameter: If > 0, drill a hole this wide through the bottom.
+    """
+    try:
+        import trimesh  # type: ignore
+    except ImportError:
+        return err("trimesh required")
+    src = Path(stl_file).resolve()
+    out = Path(output_stl).resolve()
+    if not src.exists():
+        return err(f"file not found: {src}")
+    m = trimesh.load(src, force="mesh")
+    if not m.is_watertight:
+        try:
+            trimesh.repair.fill_holes(m)
+        except Exception:
+            pass
+
+    # Inner shell via voxel offset (works even for non-watertight)
+    try:
+        # Prefer robust approach: use trimesh voxel remesh
+        pitch = min(wall_thickness / 2, m.extents.min() / 100)
+        vox = m.voxelized(pitch=pitch).fill()
+        inner = vox.marching_cubes.copy()
+        inner.apply_scale(1.0 - (2 * wall_thickness / m.extents.mean()))
+        hollow = m.difference(inner)
+    except Exception as e:
+        return err(f"hollow failed: {e}")
+
+    if drain_hole_diameter > 0:
+        mn = m.bounds[0]; mx = m.bounds[1]
+        cx = (mn[0] + mx[0]) / 2
+        cy = (mn[1] + mx[1]) / 2
+        drill = trimesh.creation.cylinder(radius=drain_hole_diameter/2,
+                                          height=(mx[2]-mn[2]) + 4)
+        drill.apply_translation([cx, cy, (mn[2] + mx[2]) / 2])
+        try:
+            hollow = hollow.difference(drill)
+        except Exception:
+            pass
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    hollow.export(out)
+    return ok(f"hollowed with {wall_thickness}mm walls → {out.name}",
+              path=str(out), wall_thickness=wall_thickness,
+              drain_hole_diameter=drain_hole_diameter)

@@ -4,23 +4,34 @@ build-backend = "hatchling.build"
 
 [project]
 name = "strands-cad"
-version = "0.1.0"
-description = "🔧 Atomic CAD, mesh, slice & print tools for Strands agents — prompt-to-print pipeline"
+version = "0.2.0"
+description = "🔧 Atomic CAD, mesh, SDF, slice & print tools for Strands agents — prompt-to-print pipeline"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Cagatay Cali" }]
-keywords = ["3d", "cad", "openscad", "3d-printing", "bambu", "mesh", "stl", "3mf", "strands", "agents"]
+keywords = ["3d", "cad", "openscad", "sdf", "signed-distance-field", "3d-printing", "bambu", "mesh", "stl", "3mf", "strands", "agents"]
 
 dependencies = [
     "strands-agents>=0.1.0",
+    # Core mesh ops
+    "numpy>=1.24",
+    "trimesh>=4.0",
+    "scikit-image>=0.22",
+    # SDF (fogleman/sdf) — pure Python signed distance field composition
+    "sdf @ git+https://github.com/fogleman/sdf.git",
+    # Decimation
+    "fast-simplification>=0.1",
+    # Sim
+    "mujoco>=3.0",
+    # Bambu printer control
+    "paho-mqtt>=2.0",
+    "requests>=2.31",
+    # Mesh IO
+    "meshio>=5.0",
 ]
 
 [project.optional-dependencies]
-mesh = ["trimesh>=4.0", "numpy>=1.24"]
-sim  = ["mujoco>=3.0", "numpy>=1.24"]
-bambu = ["paho-mqtt>=2.0", "requests>=2.31"]
-all  = ["strands-cad[mesh,sim,bambu]"]
 dev  = ["pytest>=8.0", "pytest-cov"]
 
 [project.urls]
@@ -29,3 +40,6 @@ Repository = "https://github.com/cagataycali/strands-cad"
 
 [tool.hatch.build.targets.wheel]
 packages = ["strands_cad"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
