@@ -58,6 +58,52 @@ python -m strands_cad.install_extras neural     # openai/shap-e → neural_text_
 | **Preview** | `preview_serve`, `preview_stop` |
 | **Meta** | `bom_parse`, `bom_total`, `journal_append` |
 
+## MCP Server (Claude Code, Claude Desktop, Cursor, Kiro)
+
+All 51 tools are exposable over the [Model Context Protocol](https://modelcontextprotocol.io/) via the `strands-cad-mcp` entrypoint (built on [strands-mcp-server](https://github.com/cagataycali/strands-mcp-server)).
+
+### Claude Code
+
+```bash
+claude mcp add strands-cad -- strands-cad-mcp
+# or skip heavy groups for faster startup:
+claude mcp add strands-cad -- strands-cad-mcp --skip neural,sim
+```
+
+### Claude Desktop
+
+```json
+{
+  "mcpServers": {
+    "strands-cad": {
+      "command": "strands-cad-mcp",
+      "args": ["--skip", "neural"]
+    }
+  }
+}
+```
+
+### HTTP mode (multi-client / remote)
+
+```bash
+strands-cad-mcp --http --port 8000            # → http://localhost:8000/mcp
+strands-cad-mcp --http --port 8000 --stateless  # multi-node scalable
+```
+
+### Options
+
+| Flag | Effect |
+|---|---|
+| *(default)* | stdio transport, all available tool groups |
+| `--http --port N` | StreamableHTTP transport instead of stdio |
+| `--stateless` | Fresh transport per request (horizontal scaling) |
+| `--tools a,b,c` | Expose only named tools |
+| `--skip neural,sim,...` | Skip tool groups (`scad,stl,mf3,slice,bambu,sim,preview,meta,sdf,cadquery,neural`) |
+| `--agent-invocation` | Also expose `invoke_agent` for full conversations |
+| `--debug` | Verbose logging (stderr) |
+
+Missing optional deps (torch, mujoco, cadquery, sdf) auto-disable their group — the server always boots with whatever is installed.
+
 ## Quick Examples
 
 ### Parametric CAD (CadQuery)

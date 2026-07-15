@@ -143,7 +143,7 @@ def main() -> None:
 
     agent = Agent(
         name="strands-cad-mcp",
-        tools=tools,
+        tools=tools + [mcp_server],  # mcp_server must be registered to invoke it
         load_tools_from_directory=False,
         system_prompt="strands-cad tool server: SCAD, mesh, SDF, cadquery, slicing, Bambu printer control.",
         callback_handler=None,
@@ -151,7 +151,11 @@ def main() -> None:
 
     transport = "http" if args.http else "stdio"
     logger.info(f"Starting MCP server (transport={transport})")
-    agent.tool.mcp_server(
+    # Call the raw tool function directly (NOT agent.tool.mcp_server) —
+    # agent.tool.* marks the agent as mid-invocation, and since stdio mode
+    # blocks forever, all nested tool calls would then be rejected by the SDK.
+    _fn = getattr(mcp_server, "_tool_func", None) or getattr(mcp_server, "original_function", None) or mcp_server
+    _fn(
         action="start",
         transport=transport,
         port=args.port,
