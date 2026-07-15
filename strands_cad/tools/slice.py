@@ -77,6 +77,7 @@ def slice_bambu(
     input_3mf: str,
     output_gcode: str,
     profile: str = "PLA_0_20",
+    printer_model: str = "Bambu Lab X2D",
     extra_args: list[str] | None = None,
 ) -> dict:
     """Slice a 3MF using Bambu Studio CLI.
@@ -84,7 +85,9 @@ def slice_bambu(
     Args:
         input_3mf: Input .3mf plate.
         output_gcode: Output .gcode or .3mf (with G-code) path.
-        profile: Profile name (must exist in Bambu Studio presets, or use a built-in).
+        profile: Built-in profile name (PLA_0_20, PETG_0_20, TPU_0_20, ABS_0_20, PLA_SILK_0_16).
+        printer_model: Bambu machine preset (e.g. "Bambu Lab X2D", "Bambu Lab X1 Carbon",
+            "Bambu Lab A1", "Bambu Lab P1S").
         extra_args: Additional CLI args passed to Bambu Studio.
 
     Returns:
@@ -99,22 +102,32 @@ def slice_bambu(
         return err(f"3mf not found: {src}")
     out.parent.mkdir(parents=True, exist_ok=True)
     args = [cli, "--slice", "0", "--outputdir", str(out.parent)]
-    # Apply built-in profile as CLI overrides when recognized
+    # Use official Bambu Studio machine/process/filament presets.
+    # The CLI requires real preset JSONs (with type/name/from fields) —
+    # ad-hoc key/value JSON files are rejected ("from unsupported").
+    profiles_dir = Path(cli).parent.parent / "Resources" / "profiles" / "BBL"
+    if not profiles_dir.exists():
+        for cand in (
+            Path("/usr/share/BambuStudio/profiles/BBL"),
+            Path.home() / ".config/BambuStudio/system/BBL",
+        ):
+            if cand.exists():
+                profiles_dir = cand
+                break
     prof = PROFILES.get(profile.upper())
-    if prof:
-        import json as _json, tempfile as _tf
-        settings = {
-            "layer_height": str(prof["layer_height"]),
-            "wall_loops": str(prof["walls"]),
-            "sparse_infill_density": f"{prof['infill_pct']}%",
-            "sparse_infill_pattern": prof["infill_pattern"],
-            "brim_width": str(prof["brim_mm"]),
-            "enable_support": "1" if prof["supports"] != "off" else "0",
-            "nozzle_temperature": str(prof["nozzle_temp"]),
-        }
-        sfile = Path(_tf.mkstemp(suffix=".json")[1])
-        sfile.write_text(_json.dumps(settings))
-        args += ["--load-settings", str(sfile)]
+    machine_json = profiles_dir / "machine" / f"{printer_model} 0.4 nozzle.json"
+    layer = prof["layer_height"] if prof else 0.20
+    short_model = printer_model.replace("Bambu Lab ", "")
+    process_json = profiles_dir / "process" / f"{layer:.2f}mm Standard @BBL {short_model}.json"
+    material = (prof or {}).get("material", "PLA")
+    fil_name = {"PLA": "Bambu PLA Basic @base.json", "PLA_SILK": "Bambu PLA Silk @base.json",
+                "PETG": "Bambu PETG Basic @base.json", "TPU": "Bambu TPU 95A @base.json",
+                "ABS": "Bambu ABS @base.json"}.get(material, "Bambu PLA Basic @base.json")
+    filament_json = profiles_dir / "filament" / fil_name
+    if machine_json.exists() and process_json.exists():
+        args += ["--load-settings", f"{machine_json};{process_json}"]
+        if filament_json.exists():
+            args += ["--load-filaments", str(filament_json)]
     if extra_args:
         args.extend(extra_args)
     args.append(str(src))

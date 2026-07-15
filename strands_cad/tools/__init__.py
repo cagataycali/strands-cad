@@ -1,5 +1,9 @@
 """Atomic tools for strands-cad."""
-from strands_cad.tools.scad import scad_probe, scad_render_stl, scad_render_png, scad_validate
+from strands_cad.tools.scad import (
+    scad_probe, scad_render_stl, scad_render_png, scad_validate,
+    scad_view, scad_turntable,
+)
+from strands_cad.tools.gcode import gcode_check, gcode_preview_png
 from strands_cad.tools.stl import (
     stl_parse, stl_volume, stl_bbox, stl_weight, stl_repair, stl_transform, stl_convert,
     mesh_decimate, mesh_normalize, mesh_boolean, mesh_combine, mesh_hollow,
@@ -26,6 +30,8 @@ from strands_cad.tools.neural_tools import (
 
 __all__ = [
     "scad_probe", "scad_render_stl", "scad_render_png", "scad_validate",
+    "scad_view", "scad_turntable",
+    "gcode_check", "gcode_preview_png",
     "stl_parse", "stl_volume", "stl_bbox", "stl_weight", "stl_repair",
     "stl_transform", "stl_convert",
     "mesh_decimate", "mesh_normalize", "mesh_boolean", "mesh_combine", "mesh_hollow",

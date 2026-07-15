@@ -50,7 +50,9 @@ logger = logging.getLogger("strands_cad.mcp")
 # (torch, mujoco, cadquery, ...) only disables its group, not the server.
 TOOL_GROUPS: dict[str, tuple[str, list[str]]] = {
     "scad": ("strands_cad.tools.scad",
-             ["scad_probe", "scad_render_stl", "scad_render_png", "scad_validate"]),
+             ["scad_probe", "scad_render_stl", "scad_render_png", "scad_validate",
+              "scad_view", "scad_turntable"]),
+    "gcode": ("strands_cad.tools.gcode", ["gcode_check", "gcode_preview_png"]),
     "stl": ("strands_cad.tools.stl",
             ["stl_parse", "stl_volume", "stl_bbox", "stl_weight", "stl_repair",
              "stl_transform", "stl_convert", "mesh_decimate", "mesh_normalize",

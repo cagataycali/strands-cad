@@ -27,7 +27,8 @@ def _cq_globals() -> dict[str, Any]:
         import math as _m
     except ImportError as e:
         raise RuntimeError(f"cadquery not installed: {e}")
-    g: dict[str, Any] = {"__builtins__": {}}
+    import builtins as _bi
+    g: dict[str, Any] = {"__builtins__": _bi}
     g["cq"] = cq
     g["Workplane"] = cq.Workplane
     g["Sketch"] = cq.Sketch

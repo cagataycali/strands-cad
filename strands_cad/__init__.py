@@ -1,8 +1,10 @@
 """strands-cad — atomic 3D tools for Strands agents."""
-__version__ = "0.3.0"
+__version__ = "0.3.3"
 
 from strands_cad.tools import (
     scad_probe, scad_render_stl, scad_render_png, scad_validate,
+    scad_view, scad_turntable,
+    gcode_check, gcode_preview_png,
     stl_parse, stl_volume, stl_bbox, stl_weight, stl_repair,
     stl_transform, stl_convert,
     mesh_decimate, mesh_normalize, mesh_boolean, mesh_combine, mesh_hollow,
@@ -22,6 +24,8 @@ from strands_cad.tools import (
 
 ALL_TOOLS = [
     scad_probe, scad_render_stl, scad_render_png, scad_validate,
+    scad_view, scad_turntable,
+    gcode_check, gcode_preview_png,
     stl_parse, stl_volume, stl_bbox, stl_weight, stl_repair,
     stl_transform, stl_convert,
     mesh_decimate, mesh_normalize, mesh_boolean, mesh_combine, mesh_hollow,

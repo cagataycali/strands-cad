@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "strands-cad"
-version = "0.3.2"
+version = "0.3.3"
 description = "🔧 Atomic CAD, mesh, SDF, cadquery, neural & print tools for Strands agents — prompt-to-print pipeline"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -32,6 +32,7 @@ dependencies = [
     "scipy>=1.11",
     "trimesh>=4.0",
     "scikit-image>=0.22",
+    "rtree",
     "fast-simplification>=0.1",
     # Real CAD (B-rep / NURBS)
     "cadquery>=2.5",

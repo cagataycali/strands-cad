@@ -3,7 +3,7 @@ import strands_cad
 
 
 def test_all_tools_importable():
-    assert len(strands_cad.ALL_TOOLS) == 51, f"expected 51 tools, got {len(strands_cad.ALL_TOOLS)}"
+    assert len(strands_cad.ALL_TOOLS) == 55, f"expected 55 tools, got {len(strands_cad.ALL_TOOLS)}"
 
 
 def test_each_tool_has_name():
@@ -23,7 +23,7 @@ def test_tool_names_unique():
 
 def test_tool_layer_coverage():
     names = {getattr(t, "tool_name", None) or getattr(t, "__name__", "") for t in strands_cad.ALL_TOOLS}
-    expected_prefixes = ["scad_", "stl_", "mf3_", "slice_", "bambu_", "sim_", "preview_", "bom_", "journal_"]
+    expected_prefixes = ["scad_", "gcode_", "stl_", "mf3_", "slice_", "bambu_", "sim_", "preview_", "bom_", "journal_"]
     for prefix in expected_prefixes:
         assert any(n.startswith(prefix) for n in names), f"no tools with prefix '{prefix}'"
 

@@ -291,7 +291,7 @@ def f(p):
     out.parent.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     try:
-        wrapped_factory().save(str(out), step=resolution, bounds=tuple(bounds))
+        wrapped_factory().save(str(out), step=resolution, bounds=((bounds[0], bounds[1], bounds[2]), (bounds[3], bounds[4], bounds[5])))
     except Exception as e:
         return err(f"meshing failed: {type(e).__name__}: {e}")
     elapsed = time.time() - t0
@@ -387,7 +387,7 @@ def sdf_lattice_infill_stl(
     #   shell   = solid grown by shell_thickness inside (shell of the input)
     #   infill  = lattice_wall INTERSECTED with solid shrunk by shell_thickness
     # Then union them.
-    shell = solid_factory().shell(shell_thickness) if False else (solid() - solid_factory().dilate(-shell_thickness))
+    shell = solid_factory() - solid_factory().dilate(-shell_thickness)
     core  = solid_factory().dilate(-shell_thickness)
     infill = lattice_wall_factory() & core
     combined = shell | infill

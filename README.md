@@ -41,11 +41,12 @@ python -m strands_cad.install_extras neural     # openai/shap-e → neural_text_
 - `openscad` for `scad_*` tools — `brew install openscad`
 - `bambu-studio` for `slice_bambu` — download from bambulab.com
 
-## The 51 Atomic Tools
+## The 55 Atomic Tools
 
 | Layer | Tools |
 |---|---|
-| **SCAD** (parametric) | `scad_probe`, `scad_render_stl`, `scad_render_png`, `scad_validate` |
+| **SCAD** (parametric) | `scad_probe`, `scad_render_stl`, `scad_render_png`, `scad_validate`, `scad_view`, `scad_turntable` |
+| **G-code** | `gcode_check`, `gcode_preview_png` |
 | **CadQuery** (B-rep, NURBS) | `cq_render_stl`, `cq_render_step`, `cq_import_step`, `cq_render_svg` |
 | **SDF** (implicit math) | `sdf_render_stl`, `sdf_list_primitives`, `sdf_gyroid_infill`, `sdf_from_function`, `sdf_lattice_infill_stl` |
 | **Neural** (AI generation) | `neural_text_to_stl`, `neural_image_to_stl` |
@@ -60,7 +61,7 @@ python -m strands_cad.install_extras neural     # openai/shap-e → neural_text_
 
 ## MCP Server (Claude Code, Claude Desktop, Cursor, Kiro)
 
-All 51 tools are exposable over the [Model Context Protocol](https://modelcontextprotocol.io/) via the `strands-cad-mcp` entrypoint (built on [strands-mcp-server](https://github.com/cagataycali/strands-mcp-server)).
+All 55 tools are exposable over the [Model Context Protocol](https://modelcontextprotocol.io/) via the `strands-cad-mcp` entrypoint (built on [strands-mcp-server](https://github.com/cagataycali/strands-mcp-server)).
 
 ### Claude Code
 
