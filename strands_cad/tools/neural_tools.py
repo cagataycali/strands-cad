@@ -24,9 +24,9 @@ def _load_shape_e(kind: str = "text"):
     from shap_e.diffusion.gaussian_diffusion import diffusion_from_config  # type: ignore
     from shap_e.models.download import load_model, load_config  # type: ignore
 
-    device = torch.device("mps" if torch.backends.mps.is_available()
-                          else "cuda" if torch.cuda.is_available()
-                          else "cpu")
+    # Note: MPS does not support float64 which Shap-E's mesh decoder needs.
+    # Fall back to CPU on Apple Silicon (still fast enough — 60-90s per generation).
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     key = f"{kind}:{device}"
     if key in _SHAPE_MODELS:
@@ -111,21 +111,28 @@ def neural_text_to_stl(
 
     out = Path(output_stl).resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
+    # Write to a temp .ply first, then convert to the requested format via trimesh.
+    # (Shap-E's TriMesh only supports write_ply.)
+    tmp_ply = out.with_suffix(".shape_e.ply")
     try:
-        with open(out, "wb") as f:
+        with open(tmp_ply, "wb") as f:
             mesh.write_ply(f)
-        # ply → stl via trimesh
         import trimesh  # type: ignore
-        m = trimesh.load(str(out), force="mesh")
-        m.export(out)  # overwrite with STL if extension is .stl
+        m = trimesh.load(str(tmp_ply), force="mesh")
+        if len(m.faces) == 0:
+            return err(f"generated mesh has 0 faces (bad seed or prompt: '{prompt}')")
+        m.export(str(out))
     except Exception as e:
-        # write as ply if stl fails
-        alt = out.with_suffix(".ply")
-        with open(alt, "wb") as f:
-            mesh.write_ply(f)
-        return ok(f"generated as PLY (STL failed: {e}) → {alt}", path=str(alt))
+        return err(f"mesh export failed: {type(e).__name__}: {e}")
+    finally:
+        try:
+            tmp_ply.unlink(missing_ok=True)
+        except Exception:
+            pass
 
     elapsed = time.time() - t0
+    if not out.exists() or out.stat().st_size < 200:
+        return err(f"output STL empty/too small ({out.stat().st_size if out.exists() else 0} bytes)")
     size_kb = out.stat().st_size / 1024
     return ok(
         f"generated in {elapsed:.1f}s on {device} → {out.name} ({size_kb:.1f} KB)",
