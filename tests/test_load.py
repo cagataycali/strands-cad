@@ -3,7 +3,7 @@ import strands_cad
 
 
 def test_all_tools_importable():
-    assert len(strands_cad.ALL_TOOLS) == 55, f"expected 55 tools, got {len(strands_cad.ALL_TOOLS)}"
+    assert len(strands_cad.ALL_TOOLS) == 56, f"expected 56 tools, got {len(strands_cad.ALL_TOOLS)}"
 
 
 def test_each_tool_has_name():

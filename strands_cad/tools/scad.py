@@ -72,6 +72,8 @@ def scad_probe(scad_file: str, variables: list[str], defines: dict | None = None
         m = re.search(r'ECHO:\s*"__PROBE__\s+([A-Za-z_][A-Za-z0-9_]*)",\s*(.+)$', line)
         if m:
             name, raw = m.group(1), m.group(2).strip()
+            if raw == "undef":
+                continue  # variable not defined in the scad file
             try:
                 values[name] = float(raw)
             except ValueError:

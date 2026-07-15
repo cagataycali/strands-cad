@@ -41,7 +41,7 @@ python -m strands_cad.install_extras neural     # openai/shap-e → neural_text_
 - `openscad` for `scad_*` tools — `brew install openscad`
 - `bambu-studio` for `slice_bambu` — download from bambulab.com
 
-## The 55 Atomic Tools
+## The 56 Atomic Tools
 
 | Layer | Tools |
 |---|---|
@@ -54,14 +54,14 @@ python -m strands_cad.install_extras neural     # openai/shap-e → neural_text_
 | **STL / Mesh** | `stl_parse`, `stl_volume`, `stl_bbox`, `stl_weight`, `stl_repair`, `stl_transform`, `stl_convert`, `mesh_decimate`, `mesh_normalize`, `mesh_boolean`, `mesh_combine`, `mesh_hollow` |
 | **3MF** | `mf3_pack`, `mf3_unpack`, `mf3_read_metadata` |
 | **Slice** | `slice_bambu`, `slice_profile_get`, `slice_estimate` |
-| **Bambu Printer** | `bambu_connect`, `bambu_send`, `bambu_status`, `bambu_control`, `bambu_camera`, `bambu_ams` |
+| **Bambu Printer** | `bambu_connect`, `bambu_send`, `bambu_upload`, `bambu_status`, `bambu_control`, `bambu_camera`, `bambu_ams` |
 | **Sim** | `sim_build_mjcf`, `sim_run_headless`, `sim_view_live`, `sim_inertia_from_stl` |
 | **Preview** | `preview_serve`, `preview_stop` |
 | **Meta** | `bom_parse`, `bom_total`, `journal_append` |
 
 ## MCP Server (Claude Code, Claude Desktop, Cursor, Kiro)
 
-All 55 tools are exposable over the [Model Context Protocol](https://modelcontextprotocol.io/) via the `strands-cad-mcp` entrypoint (built on [strands-mcp-server](https://github.com/cagataycali/strands-mcp-server)).
+All 56 tools are exposable over the [Model Context Protocol](https://modelcontextprotocol.io/) via the `strands-cad-mcp` entrypoint (built on [strands-mcp-server](https://github.com/cagataycali/strands-mcp-server)).
 
 ### Claude Code
 

@@ -118,7 +118,9 @@ def sdf_render_stl(
     t0 = time.time()
     try:
         if bounds is not None and len(bounds) == 6:
-            shape.save(str(out), step=resolution, bounds=tuple(bounds))
+            shape.save(str(out), step=resolution,
+                       bounds=((bounds[0], bounds[1], bounds[2]),
+                               (bounds[3], bounds[4], bounds[5])))
         else:
             shape.save(str(out), step=resolution)
     except Exception as e:

@@ -35,7 +35,7 @@ def stl_parse(stl_file: str) -> dict:
     try:
         verts, tris = parse_stl(stl_file)
     except FileNotFoundError as e:
-        return err(str(e))
+        return err(f"file not found: {e}")
     except Exception as e:
         return err(f"parse failed: {e}")
     if not verts:
@@ -475,13 +475,20 @@ def mesh_hollow(
         except Exception:
             pass
 
-    # Inner shell via voxel offset (works even for non-watertight)
+    # Inner shell via voxel erosion: voxelize the solid, erode by
+    # wall_thickness, and mesh the eroded core. Unlike naive scaling this is
+    # a true inward offset — uniform walls regardless of shape or origin.
     try:
-        # Prefer robust approach: use trimesh voxel remesh
+        from scipy import ndimage  # type: ignore
         pitch = min(wall_thickness / 2, m.extents.min() / 100)
         vox = m.voxelized(pitch=pitch).fill()
-        inner = vox.marching_cubes.copy()
-        inner.apply_scale(1.0 - (2 * wall_thickness / m.extents.mean()))
+        erode_cells = max(1, int(round(wall_thickness / pitch)))
+        inner_matrix = ndimage.binary_erosion(vox.matrix, iterations=erode_cells)
+        if not inner_matrix.any():
+            return err(f"wall_thickness {wall_thickness}mm consumes the whole part — nothing to hollow")
+        # marching_cubes returns index-space coords; map back to world space
+        inner = trimesh.voxel.VoxelGrid(inner_matrix).marching_cubes
+        inner.apply_transform(vox.transform)
         hollow = m.difference(inner)
     except Exception as e:
         return err(f"hollow failed: {e}")
@@ -490,9 +497,10 @@ def mesh_hollow(
         mn = m.bounds[0]; mx = m.bounds[1]
         cx = (mn[0] + mx[0]) / 2
         cy = (mn[1] + mx[1]) / 2
+        # Pierce only the bottom wall into the cavity (drain), not the top.
         drill = trimesh.creation.cylinder(radius=drain_hole_diameter/2,
-                                          height=(mx[2]-mn[2]) + 4)
-        drill.apply_translation([cx, cy, (mn[2] + mx[2]) / 2])
+                                          height=wall_thickness * 4)
+        drill.apply_translation([cx, cy, mn[2] + wall_thickness])
         try:
             hollow = hollow.difference(drill)
         except Exception:

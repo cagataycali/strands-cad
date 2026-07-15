@@ -128,6 +128,9 @@ def slice_bambu(
         args += ["--load-settings", f"{machine_json};{process_json}"]
         if filament_json.exists():
             args += ["--load-filaments", str(filament_json)]
+    # Non-PLA materials aren't allowed on the default Cool Plate — pick PEI
+    if material != "PLA" and not (extra_args and "--curr-bed-type" in extra_args):
+        args += ["--curr-bed-type", "Textured PEI Plate"]
     if extra_args:
         args.extend(extra_args)
     args.append(str(src))
@@ -178,12 +181,17 @@ def slice_estimate(gcode_file: str) -> dict:
                     + (int(hours.group(1))*3600 if hours else 0) \
                     + (int(mins.group(1))*60 if mins else 0) \
                     + (int(secs.group(1)) if secs else 0)
-        m = re.search(r"filament used \[g\]\s*=\s*([\d.]+)", s, re.I)
+        # PrusaSlicer: "filament used [g] = 12.3" / Bambu: "total filament weight [g] : 12.3"
+        m = re.search(r"filament (?:used|weight) \[g\]\s*[=:]\s*([\d.]+)", s, re.I)
         if m:
-            fil_g = float(m.group(1))
-        m = re.search(r"filament used \[mm\]\s*=\s*([\d.]+)", s, re.I)
+            val = float(m.group(1))
+            if val > 0 or fil_g is None:
+                fil_g = val
+        m = re.search(r"filament (?:used|length) \[mm\]\s*[=:]\s*([\d.]+)", s, re.I)
         if m:
-            fil_mm = float(m.group(1))
+            val = float(m.group(1))
+            if val > 0 or fil_mm is None:
+                fil_mm = val
     hms = ""
     if est_sec is not None:
         h, r = divmod(int(est_sec), 3600)
