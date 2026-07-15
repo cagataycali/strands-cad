@@ -145,7 +145,71 @@ def bambu_send(file_path: str, plate_index: int = 1, use_ams: bool = True) -> di
     client.publish(f"device/{serial}/request", json.dumps(payload))
     return ok(f"job dispatched: {src.name} (plate {plate_index})",
               job={"file": src.name, "plate": plate_index, "use_ams": use_ams},
-              note="File must already be on SD card. Use Bambu Handy or FTP to upload first.")
+              note="Use bambu_upload() first if the file is not yet on the SD card.")
+
+
+@tool
+def bambu_upload(file_path: str, remote_name: str = "") -> dict:
+    """Upload a file to the printer's SD card via FTPS (implicit TLS, port 990).
+
+    This closes the full print loop: slice → upload → bambu_send.
+
+    Args:
+        file_path: Local path to .3mf or .gcode file.
+        remote_name: Filename on the SD card (defaults to local filename).
+
+    Returns:
+        {status, content, remote_path}
+    """
+    conn = _require_conn()
+    if not conn:
+        return err("not connected. Call bambu_connect() first.")
+    with _LOCK:
+        ip = _CONN["ip"]
+        access = _CONN["access_code"]
+    src = Path(file_path).resolve()
+    if not src.exists():
+        return err(f"file not found: {src}")
+    name = remote_name or src.name
+
+    import ftplib
+
+    class ImplicitFTPS(ftplib.FTP_TLS):
+        """FTP_TLS subclass for implicit TLS (Bambu uses port 990)."""
+        def connect(self, host="", port=0, timeout=-999, source_address=None):
+            import socket as _socket
+            if host:
+                self.host = host
+            if port:
+                self.port = port
+            if timeout != -999:
+                self.timeout = timeout
+            self.sock = _socket.create_connection((self.host, self.port), self.timeout)
+            self.af = self.sock.family
+            self.sock = self.context.wrap_socket(self.sock, server_hostname=self.host)
+            self.file = self.sock.makefile("r", encoding=self.encoding)
+            self.welcome = self.getresp()
+            return self.welcome
+
+    try:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        ftps = ImplicitFTPS(context=ctx)
+        ftps.connect(ip, 990, timeout=15)
+        ftps.login("bblp", access)
+        ftps.prot_p()
+        with open(src, "rb") as f:
+            ftps.storbinary(f"STOR {name}", f, blocksize=65536)
+        try:
+            size = ftps.size(name)
+        except Exception:
+            size = src.stat().st_size
+        ftps.quit()
+    except Exception as e:
+        return err(f"FTPS upload failed: {e}")
+    return ok(f"uploaded {src.name} -> printer SD as '{name}' ({size} bytes)",
+              remote_path=name, size_bytes=size)
 
 
 @tool

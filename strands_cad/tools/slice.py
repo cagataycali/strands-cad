@@ -98,9 +98,26 @@ def slice_bambu(
     if not src.exists():
         return err(f"3mf not found: {src}")
     out.parent.mkdir(parents=True, exist_ok=True)
-    args = [cli, "--slice", "0", "--outputdir", str(out.parent), str(src)]
+    args = [cli, "--slice", "0", "--outputdir", str(out.parent)]
+    # Apply built-in profile as CLI overrides when recognized
+    prof = PROFILES.get(profile.upper())
+    if prof:
+        import json as _json, tempfile as _tf
+        settings = {
+            "layer_height": str(prof["layer_height"]),
+            "wall_loops": str(prof["walls"]),
+            "sparse_infill_density": f"{prof['infill_pct']}%",
+            "sparse_infill_pattern": prof["infill_pattern"],
+            "brim_width": str(prof["brim_mm"]),
+            "enable_support": "1" if prof["supports"] != "off" else "0",
+            "nozzle_temperature": str(prof["nozzle_temp"]),
+        }
+        sfile = Path(_tf.mkstemp(suffix=".json")[1])
+        sfile.write_text(_json.dumps(settings))
+        args += ["--load-settings", str(sfile)]
     if extra_args:
         args.extend(extra_args)
+    args.append(str(src))
     try:
         r = subprocess.run(args, capture_output=True, text=True, timeout=600)
     except subprocess.TimeoutExpired:

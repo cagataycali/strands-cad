@@ -4,24 +4,32 @@ build-backend = "hatchling.build"
 
 [project]
 name = "strands-cad"
-version = "0.2.0"
-description = "🔧 Atomic CAD, mesh, SDF, slice & print tools for Strands agents — prompt-to-print pipeline"
+version = "0.3.0"
+description = "🔧 Atomic CAD, mesh, SDF, cadquery, neural & print tools for Strands agents"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Cagatay Cali" }]
-keywords = ["3d", "cad", "openscad", "sdf", "signed-distance-field", "3d-printing", "bambu", "mesh", "stl", "3mf", "strands", "agents"]
+keywords = ["3d", "cad", "openscad", "cadquery", "sdf", "shap-e", "3d-printing", "bambu", "mesh", "stl", "3mf", "strands", "agents"]
 
 dependencies = [
     "strands-agents>=0.1.0",
-    # Core mesh ops
+    # Core mesh
     "numpy>=1.24",
+    "scipy>=1.11",
     "trimesh>=4.0",
     "scikit-image>=0.22",
-    # SDF (fogleman/sdf) — pure Python signed distance field composition
-    "sdf @ git+https://github.com/fogleman/sdf.git",
-    # Decimation
     "fast-simplification>=0.1",
+    # SDF (fogleman/sdf) — implicit math → mesh
+    "sdf @ git+https://github.com/fogleman/sdf.git",
+    # Real CAD (B-rep / NURBS)
+    "cadquery>=2.5",
+    # Neural (text/image → 3D)
+    "shap-e @ git+https://github.com/openai/shap-e.git",
+    "torch>=2.0",
+    "torchvision>=0.15",
+    "ipywidgets>=8.0",
+    "Pillow>=10.0",
     # Sim
     "mujoco>=3.0",
     # Bambu printer control

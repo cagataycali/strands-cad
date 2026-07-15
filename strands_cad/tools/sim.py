@@ -51,8 +51,10 @@ def sim_inertia_from_stl(
         com = m.center_mass.tolist()
         # trimesh moment_inertia is in kg·m² for its density; scale for our mass
         I = (m.moment_inertia * (mass_g / 1000.0) / max(m.mass, 1e-9)).tolist()
+        diag = [I[0][0], I[1][1], I[2][2]]
         return ok(f"mass={mass_g:.2f} g, vol={vol_cm3:.2f} cm³",
                   mass_g=mass_g, volume_cm3=vol_cm3, com=com, inertia=I,
+                  diaginertia=diag,
                   effective_density_g_cm3=effective_density)
     except ImportError:
         # fallback: bbox-based approximation
@@ -86,8 +88,10 @@ def sim_build_mjcf(
     """Compose a MuJoCo MJCF (XML) referencing one or more mesh files.
 
     Args:
-        meshes: List of {name, path, mass_g?, pos?, rgba?} entries. Each becomes a body
-            with a mesh geom.
+        meshes: List of {name, path, mass_g?, pos?, rgba?, com?, diaginertia?} entries.
+            Each becomes a body with a mesh geom. Pass com ([x,y,z] mm) and
+            diaginertia ([Ixx,Iyy,Izz] kg*m^2) from sim_inertia_from_stl for
+            physically-accurate simulation; otherwise a default is used.
         output_mjcf: Output .xml path (MJCF).
         gravity: World gravity vector (m/s²).
         timestep: Simulation timestep (seconds).
@@ -111,10 +115,18 @@ def sim_build_mjcf(
         rgba = mspec.get("rgba", [0.6, 0.6, 0.6, 1])
         mass_g = mspec.get("mass_g", 1.0)
         mass_kg = mass_g / 1000.0
+        # Real inertia if provided (from sim_inertia_from_stl); else conservative default
+        com_mm = mspec.get("com", [0, 0, 0])
+        com_m = [c / 1000.0 for c in com_mm]
+        di = mspec.get("diaginertia")
+        if di and len(di) == 3:
+            di = [max(abs(float(x)), 1e-9) for x in di]
+        else:
+            di = [1e-4, 1e-4, 1e-4]
         mesh_assets.append(f'    <mesh name="{name}" file="{path}" scale="0.001 0.001 0.001"/>')
         bodies.append(f'''    <body name="{name}" pos="{pos[0]} {pos[1]} {pos[2]}">
       <freejoint/>
-      <inertial pos="0 0 0" mass="{mass_kg:.6f}" diaginertia="1e-4 1e-4 1e-4"/>
+      <inertial pos="{com_m[0]:.6f} {com_m[1]:.6f} {com_m[2]:.6f}" mass="{mass_kg:.6f}" diaginertia="{di[0]:.3e} {di[1]:.3e} {di[2]:.3e}"/>
       <geom type="mesh" mesh="{name}" rgba="{rgba[0]} {rgba[1]} {rgba[2]} {rgba[3]}"/>
     </body>''')
 

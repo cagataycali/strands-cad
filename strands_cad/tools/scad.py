@@ -1,4 +1,4 @@
-"""SCAD layer — atomic OpenSCAD tools."""
+"""SCAD layer — atomic OpenSCAD tools (with -D defines, visual feedback)."""
 from __future__ import annotations
 import re
 import subprocess
@@ -18,13 +18,39 @@ def _run_openscad(args: list[str], timeout: int = 120) -> tuple[str, str, int]:
         return "", "openscad binary not found in PATH", 127
 
 
+def _defines_args(defines: dict | None) -> list[str]:
+    """Build -D CLI args from a {name: value} dict. Strings are auto-quoted."""
+    args: list[str] = []
+    for k, v in (defines or {}).items():
+        if isinstance(v, bool):
+            args += ["-D", f"{k}={'true' if v else 'false'}"]
+        elif isinstance(v, (int, float)):
+            args += ["-D", f"{k}={v}"]
+        else:
+            args += ["-D", f'{k}="{v}"']
+    return args
+
+
+# Named camera presets → OpenSCAD --camera rot strings (tx,ty,tz,rx,ry,rz,dist)
+CAMERAS = {
+    "iso":    "0,0,0,55,0,25,140",
+    "front":  "0,0,0,90,0,0,140",
+    "back":   "0,0,0,90,0,180,140",
+    "top":    "0,0,0,0,0,0,140",
+    "bottom": "0,0,0,180,0,0,140",
+    "left":   "0,0,0,90,0,270,140",
+    "right":  "0,0,0,90,0,90,140",
+}
+
+
 @tool
-def scad_probe(scad_file: str, variables: list[str]) -> dict:
+def scad_probe(scad_file: str, variables: list[str], defines: dict | None = None) -> dict:
     """Extract runtime values of OpenSCAD variables via echo probe.
 
     Args:
         scad_file: Path to .scad file (its variables are `include`d).
         variables: List of variable names to probe (e.g. ["WHEELBASE", "TOTAL_H"]).
+        defines: Optional {name: value} overrides passed as -D (parametric probing).
 
     Returns:
         {status, content, values: {name: float}} — echoed variable values.
@@ -36,12 +62,9 @@ def scad_probe(scad_file: str, variables: list[str]) -> dict:
     probe = Path(tempfile.mkstemp(suffix=".scad")[1])
     probe.write_text(f'include <{src}>;\n{echos}\ncube(1);\n')
     stl_out = Path(tempfile.mkstemp(suffix=".stl")[1])
-    _, stderr, rc = _run_openscad(["-o", str(stl_out), str(probe)])
+    _, stderr, rc = _run_openscad(["-o", str(stl_out), *_defines_args(defines), str(probe)])
     probe.unlink(missing_ok=True)
     stl_out.unlink(missing_ok=True)
-    if rc != 0 and rc != 127:
-        # openscad may return non-zero but still emit echoes; only fail on missing binary
-        pass
     if rc == 127:
         return err(stderr)
     values: dict[str, float | str] = {}
@@ -59,20 +82,25 @@ def scad_probe(scad_file: str, variables: list[str]) -> dict:
 
 
 @tool
-def scad_render_stl(scad_file: str, output_stl: str, format: str = "binstl") -> dict:
+def scad_render_stl(scad_file: str, output_stl: str, format: str = "binstl",
+                    defines: dict | None = None) -> dict:
     """Render one .scad file to one STL.
 
     Args:
         scad_file: Input .scad path.
         output_stl: Output .stl path.
         format: 'binstl' (binary, default) or 'asciistl'.
+        defines: Optional {name: value} variable overrides passed as -D.
+            Lets you render parametric variants without editing the file.
     """
     src = Path(scad_file).resolve()
     out = Path(output_stl).resolve()
     if not src.exists():
         return err(f"scad file not found: {src}")
     out.parent.mkdir(parents=True, exist_ok=True)
-    _, stderr, rc = _run_openscad(["-o", str(out), "--export-format", format, str(src)], timeout=300)
+    _, stderr, rc = _run_openscad(
+        ["-o", str(out), "--export-format", format, *_defines_args(defines), str(src)],
+        timeout=300)
     if rc == 127:
         return err(stderr)
     if not out.exists() or out.stat().st_size == 0:
@@ -87,6 +115,7 @@ def scad_render_png(
     size: tuple[int, int] = (1200, 900),
     camera: str = "0,0,0,55,0,25,120",
     colorscheme: str = "Tomorrow",
+    defines: dict | None = None,
 ) -> dict:
     """Render one .scad file to a PNG preview.
 
@@ -96,6 +125,7 @@ def scad_render_png(
         size: (width, height) in pixels.
         camera: OpenSCAD --camera string (tx,ty,tz,rx,ry,rz,dist).
         colorscheme: OpenSCAD --colorscheme name.
+        defines: Optional {name: value} variable overrides passed as -D.
     """
     src = Path(scad_file).resolve()
     out = Path(output_png).resolve()
@@ -108,6 +138,7 @@ def scad_render_png(
         "--viewall", "--autocenter",
         f"--camera={camera}",
         f"--colorscheme={colorscheme}",
+        *_defines_args(defines),
         str(src),
     ]
     _, stderr, rc = _run_openscad(args, timeout=180)
@@ -116,6 +147,113 @@ def scad_render_png(
     if not out.exists() or out.stat().st_size == 0:
         return err(f"render failed: {stderr[:400]}")
     return ok(f"rendered → {out}", path=str(out))
+
+
+@tool
+def scad_view(
+    scad_file: str,
+    view: str = "iso",
+    size: tuple[int, int] = (800, 600),
+    colorscheme: str = "Tomorrow",
+    defines: dict | None = None,
+) -> dict:
+    """Render a .scad file AND return the image so the agent can SEE it.
+
+    This closes the design→look→refine loop: the model receives actual pixels
+    (Converse image block), not just a file path.
+
+    Args:
+        scad_file: Input .scad path.
+        view: Named view — one of: iso, front, back, top, bottom, left, right.
+            Or a raw OpenSCAD camera string "tx,ty,tz,rx,ry,rz,dist".
+        size: (width, height) in pixels (keep modest — it goes into context).
+        colorscheme: OpenSCAD --colorscheme name.
+        defines: Optional {name: value} -D overrides.
+
+    Returns:
+        {status, content: [text, image-block], path}
+    """
+    src = Path(scad_file).resolve()
+    if not src.exists():
+        return err(f"scad file not found: {src}")
+    camera = CAMERAS.get(view, view)
+    out = Path(tempfile.mkstemp(suffix=".png")[1])
+    args = [
+        "-o", str(out),
+        f"--imgsize={size[0]},{size[1]}",
+        "--viewall", "--autocenter",
+        f"--camera={camera}",
+        f"--colorscheme={colorscheme}",
+        *_defines_args(defines),
+        str(src),
+    ]
+    _, stderr, rc = _run_openscad(args, timeout=180)
+    if rc == 127:
+        return err(stderr)
+    if not out.exists() or out.stat().st_size == 0:
+        return err(f"render failed: {stderr[:400]}")
+    img_bytes = out.read_bytes()
+    return {
+        "status": "success",
+        "content": [
+            {"text": f"view '{view}' of {src.name} ({len(img_bytes)} bytes)"},
+            {"image": {"format": "png", "source": {"bytes": img_bytes}}},
+        ],
+        "path": str(out),
+    }
+
+
+@tool
+def scad_turntable(
+    scad_file: str,
+    views: list[str] = ["iso", "front", "top", "right"],
+    size: tuple[int, int] = (600, 450),
+    colorscheme: str = "Tomorrow",
+    defines: dict | None = None,
+) -> dict:
+    """Render multiple named views in one call and return ALL images (visual inspection).
+
+    Args:
+        scad_file: Input .scad path.
+        views: List of named views (iso, front, back, top, bottom, left, right).
+        size: Per-view (width, height) — keep small, all go into context.
+        colorscheme: OpenSCAD --colorscheme name.
+        defines: Optional {name: value} -D overrides.
+
+    Returns:
+        {status, content: [text, img, img, ...], paths}
+    """
+    src = Path(scad_file).resolve()
+    if not src.exists():
+        return err(f"scad file not found: {src}")
+    content: list[dict] = []
+    paths: list[str] = []
+    failed: list[str] = []
+    for v in views:
+        camera = CAMERAS.get(v, v)
+        out = Path(tempfile.mkstemp(suffix=".png")[1])
+        args = [
+            "-o", str(out),
+            f"--imgsize={size[0]},{size[1]}",
+            "--viewall", "--autocenter",
+            f"--camera={camera}",
+            f"--colorscheme={colorscheme}",
+            *_defines_args(defines),
+            str(src),
+        ]
+        _, stderr, rc = _run_openscad(args, timeout=180)
+        if rc == 127:
+            return err(stderr)
+        if not out.exists() or out.stat().st_size == 0:
+            failed.append(v)
+            continue
+        content.append({"text": f"── view: {v} ──"})
+        content.append({"image": {"format": "png", "source": {"bytes": out.read_bytes()}}})
+        paths.append(str(out))
+    header = f"turntable of {src.name}: {len(paths)}/{len(views)} views"
+    if failed:
+        header += f" (failed: {failed})"
+    return {"status": "success", "content": [{"text": header}, *content], "paths": paths}
 
 
 @tool

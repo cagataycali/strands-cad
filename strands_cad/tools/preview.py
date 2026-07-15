@@ -36,11 +36,11 @@ def _make_handler(root: Path):
 
         def do_GET(self):
             if self.path in ("/", "/index.html"):
-                pngs = sorted([p.name for p in root.glob("*.png")] +
-                              [p.name for p in root.glob("**/*.png")])
+                png_paths = sorted(set(list(root.glob("*.png")) + list(root.glob("**/*.png"))))
                 cards = "\n".join(
-                    f'<div class="card"><h3>{p}</h3><img src="{p}?t={int(threading.get_ident())}"></div>'
-                    for p in pngs[:24]
+                    f'<div class="card"><h3>{p.relative_to(root)}</h3>'
+                    f'<img src="{p.relative_to(root)}?t={int(p.stat().st_mtime)}"></div>'
+                    for p in png_paths[:24]
                 )
                 body = _INDEX_TEMPLATE.format(refresh=4, cards=cards or "<p style='color:#888'>no PNGs yet</p>")
                 self.send_response(200)
