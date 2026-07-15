@@ -1,0 +1,111 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "strands-cad"
+version = "0.5.2"
+description = "🔧 CAD, mesh, SDF, cadquery, neural & print tools + WebAuthn-gated 3d printer dashboard for Strands agents - prompt-to-print pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Cagatay Cali" }]
+keywords = ["3d", "cad", "openscad", "cadquery", "sdf", "shap-e", "3d-printing", "bambu", "mesh", "stl", "3mf", "strands", "agents", "dashboard", "webauthn"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Graphics :: 3D Modeling",
+    "Topic :: Scientific/Engineering",
+]
+
+# ---------------------------------------------------------------------------
+# CORE dependencies — everything here installs in ONE shot on py3.10–3.13 with
+# plain `pip install strands-cad`. No git URLs, no build-from-source landmines.
+#
+#   • numba/llvmlite are pinned to modern wheels so cadquery's transitive
+#     numba dep never resolves to the ancient 0.53.1 (which hard-fails to
+#     build on Python >=3.10 — the classic strands-cad install trap).
+# ---------------------------------------------------------------------------
+dependencies = [
+    "strands-agents>=0.1.0",
+    "strands-agents-tools>=0.8.0",
+    "strands-mcp-server>=0.1.4",
+    # Core mesh
+    "numpy>=1.24",
+    "scipy>=1.11",
+    "trimesh>=4.0",
+    "scikit-image>=0.22",
+    "rtree",
+    "fast-simplification>=0.1",
+    "meshio>=5.0",
+    # trimesh format/feature backends (all ship wheels):
+    #   manifold3d → mesh_boolean/mesh_hollow, lxml → 3MF export,
+    #   svg.path+shapely+networkx+mapbox-earcut → mesh_from_svg extrusion.
+    "manifold3d>=2.0",
+    "lxml>=4.9",
+    "svg.path>=6.0",
+    "shapely>=2.0",
+    "networkx>=3.0",
+    "mapbox-earcut>=1.0",
+    # Real CAD (B-rep / NURBS) — cadquery drags in numba; pin it forward so
+    # the resolver never falls back to numba 0.53.1 / llvmlite 0.36 (py<3.10).
+    "cadquery>=2.5",
+    "numba>=0.59",
+    "llvmlite>=0.42",
+    # Bambu printer control
+    "paho-mqtt>=2.0",
+    "requests>=2.31",
+]
+
+# NOTE: `sdf` (fogleman) and `shap-e` (openai) are GitHub-only —
+# PyPI disallows direct git URLs, so users install them separately:
+#   pip install strands-cad
+#   python -m strands_cad.install_extras          # sdf + neural, resolver-safe
+# (install_extras installs shap-e with --no-deps to avoid its ancient numba pin.)
+
+[project.optional-dependencies]
+# Heavy / GPU-ish groups kept OUT of core so `pip install strands-cad` stays
+# fast and reliable. Opt in only to what you need.
+neural = ["torch>=2.0", "torchvision>=0.15", "Pillow>=10.0", "tqdm>=4.60", "ipywidgets>=8.0"]
+sim    = ["mujoco>=3.0"]
+# 🖥️ WebAuthn-gated live printer dashboard (FastAPI + passkeys + RTSPS camera)
+dashboard = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "webauthn>=2.0",
+    "PyJWT>=2.8",
+    "cryptography>=42.0",
+    "imageio-ffmpeg>=0.5",   # bundled static ffmpeg 7 (rtsps camera transcode)
+    "python-dotenv>=1.0",
+    "openai>=1.40",       # 🎙️ OpenAI Realtime voice (ephemeral token minting)
+]
+all = [
+    "strands-cad[neural,sim,dashboard]",
+]
+# soft-webauthn = software authenticator, lets the test suite run a real passkey
+# ceremony (and a cross-origin attack) with no hardware key.
+dev = ["pytest>=8.0", "pytest-cov", "build", "twine", "soft-webauthn>=0.1"]
+
+[project.scripts]
+strands-cad-install-slicer = "strands_cad.install_slicer:main"
+strands-cad-mcp = "strands_cad.mcp:main"
+strands-cad-dashboard = "strands_cad.dashboard.server:main"
+strands-cad-thinker = "strands_cad.dashboard.thinker:main"
+strands-cad-telegram = "strands_cad.dashboard.telegram:main"
+
+[project.urls]
+Homepage   = "https://github.com/cagataycali/strands-cad"
+Repository = "https://github.com/cagataycali/strands-cad"
+Issues     = "https://github.com/cagataycali/strands-cad/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["strands_cad"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"strands_cad/dashboard/frontend/index.html" = "strands_cad/dashboard/frontend/index.html"

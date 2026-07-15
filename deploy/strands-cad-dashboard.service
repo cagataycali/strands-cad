@@ -1,0 +1,19 @@
+[Unit]
+Description=strands-cad — dashboard (WebAuthn printer cockpit on :8099)
+PartOf=strands-cad.target
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@INSTALL_DIR@
+EnvironmentFile=-@INSTALL_DIR@/.env
+Environment=STRANDS_CAD_SPLIT_LOOPS=1
+ExecStart=@VENV@/bin/strands-cad-dashboard --no-auth
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=strands-cad.target default.target

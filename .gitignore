@@ -1,0 +1,33 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+.DS_Store
+*.stl
+*.3mf
+*.gcode
+*.bgcode
+!examples/*.stl
+!tests/fixtures/*.stl
+examples/props/
+# dashboard runtime artifacts
+.strands_cad_auth.json
+.strands_cad_tls/
+.coverage
+system_prompt.prompt
+# secrets & local state
+.env
+.strands_cad_config.json
+.strands_cad_plate.json
+*.bak
+00000.log
+docker/orcaslicer/orcaslicer-package.tar.gz
+site/
+
+# stray slicer artifact
+result.json

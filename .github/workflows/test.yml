@@ -1,0 +1,37 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install OpenSCAD (for scad_* tests)
+        run: sudo apt-get update && sudo apt-get install -y openscad
+
+      - name: Install package (CPU torch to keep it light)
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[dev]"
+
+      - name: Install fogleman/sdf (git-only extra, for sdf_* tests)
+        run: pip install git+https://github.com/fogleman/sdf.git || echo "sdf install failed — tests will skip"
+
+      - name: Run smoke suite (README showcase snippets)
+        run: pytest tests/ -v --tb=short
+
+      - name: Tool count sanity
+        run: python -c "from strands_cad.tools import __all__; print(len(__all__), 'tools'); assert len(__all__) >= 50"

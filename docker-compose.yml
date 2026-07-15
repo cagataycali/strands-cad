@@ -1,0 +1,61 @@
+# =============================================================================
+# strands-cad — full printer cockpit stack (docker compose).
+#   make docker-build            # build the app image
+#   make docker-up               # dashboard only (:8099)
+#   make docker-up-all           # dashboard + thinker + telegram
+#   make docker-down             # stop everything
+#
+# The three loops share ONE image (Dockerfile); the entrypoint dispatches by
+# command. They talk to the Bambu printer directly (MQTT :8883 + RTSPS :322)
+# over the LAN, so bridge networking is fine. Config comes from .env.
+# =============================================================================
+
+x-cad: &cad
+  image: strands-cad:latest
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file: .env
+  restart: unless-stopped
+  volumes:
+    - ./examples:/app/examples          # sliced gcode / exported 3mf
+    - cad-state:/app/.state             # config + plate + auth persistence
+  environment:
+    STRANDS_CAD_SPLIT_LOOPS: "1"
+    STRANDS_CAD_CONFIG_STORE: "/app/.state/.strands_cad_config.json"
+    STRANDS_CAD_WORKDIR: "/app/.state"
+
+services:
+  # ---- Web dashboard (WebAuthn cockpit on :8099) ----------------------------
+  dashboard:
+    <<: *cad
+    container_name: strands-cad-dashboard
+    command: ["dashboard"]
+    ports:
+      - "${STRANDS_CAD_DASH_PORT:-8099}:8099"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8099/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ---- Slow-thinker cockpit loop --------------------------------------------
+  thinker:
+    <<: *cad
+    container_name: strands-cad-thinker
+    command: ["thinker"]
+    environment:
+      STRANDS_CAD_SPLIT_LOOPS: "1"
+      THINKER_INTERVAL: "${THINKER_INTERVAL:-60}"
+    profiles: ["thinker", "all"]
+
+  # ---- Telegram bridge ------------------------------------------------------
+  telegram:
+    <<: *cad
+    container_name: strands-cad-telegram
+    command: ["telegram"]
+    profiles: ["telegram", "all"]
+
+volumes:
+  cad-state:

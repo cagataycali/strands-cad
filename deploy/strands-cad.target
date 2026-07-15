@@ -1,0 +1,7 @@
+[Unit]
+Description=strands-cad — full printer cockpit stack (dashboard + thinker + telegram)
+Wants=strands-cad-dashboard.service strands-cad-thinker.service strands-cad-telegram.service
+After=network-online.target
+
+[Install]
+WantedBy=default.target

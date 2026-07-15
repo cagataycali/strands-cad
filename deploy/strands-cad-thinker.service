@@ -1,0 +1,19 @@
+[Unit]
+Description=strands-cad — slow-thinker cockpit loop (printer reflection every 60s)
+PartOf=strands-cad.target
+After=network-online.target strands-cad-dashboard.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@INSTALL_DIR@
+EnvironmentFile=-@INSTALL_DIR@/.env
+Environment=THINKER_INTERVAL=60
+ExecStart=@VENV@/bin/strands-cad-thinker
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=strands-cad.target default.target
