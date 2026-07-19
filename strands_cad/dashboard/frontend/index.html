@@ -1026,6 +1026,9 @@ window.tgRefresh=tgRefresh;
 
 // ── Floating PiP manager: drag + iPhone-style corner snapping ───────────
 const MARGIN=16;
+// top-docked pips need extra clearance so a finger can reach ABOVE them to pull down
+function safeTop(){const v=getComputedStyle(document.documentElement).getPropertyValue('--safe-t').trim();const n=parseInt(v)||0;return n;}
+function topMargin(){return Math.max(48, safeTop()+44);}
 function pipCorner(pip){ // returns nearest corner key from current center
   const r=pip.getBoundingClientRect(); const cx=r.left+r.width/2, cy=r.top+r.height/2;
   const h=cy < window.innerHeight/2 ? 't':'b'; const v=cx < window.innerWidth/2 ? 'l':'r';
@@ -1036,7 +1039,7 @@ function snapPip(pip,corner,animate=true){
   const w=pip.offsetWidth,hh=pip.offsetHeight;
   const bottomGap=getDockH()+MARGIN;
   const x=corner.includes('l')?MARGIN:(window.innerWidth-w-MARGIN);
-  const y=corner.includes('t')?MARGIN:(window.innerHeight-hh-bottomGap);
+  const y=corner.includes('t')?topMargin():(window.innerHeight-hh-bottomGap);
   pip.style.left=x+'px';pip.style.top=y+'px';pip.style.right='auto';pip.style.bottom='auto';
   if(!animate) requestAnimationFrame(()=>pip.style.transition='');
 }
@@ -1048,7 +1051,7 @@ function getDockH(){ const d=document.getElementById('dock'); if(!d) return 90;
 function showSnapZones(active){ ['tl','tr','bl','br'].forEach(c=>{
   const z=document.getElementById('sz-'+c); if(!z)return;
   z.style.left=c.includes('l')?MARGIN+'px':'auto'; z.style.right=c.includes('r')?MARGIN+'px':'auto';
-  z.style.top=c.includes('t')?MARGIN+'px':'auto'; z.style.bottom=c.includes('b')?(getDockH()+MARGIN)+'px':'auto';
+  z.style.top=c.includes('t')?topMargin()+'px':'auto'; z.style.bottom=c.includes('b')?(getDockH()+MARGIN)+'px':'auto';
   z.classList.toggle('show',active===c); }); }
 function hideSnapZones(){ ['tl','tr','bl','br'].forEach(c=>document.getElementById('sz-'+c)?.classList.remove('show')); }
 

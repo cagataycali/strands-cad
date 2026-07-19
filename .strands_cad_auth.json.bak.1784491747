@@ -1,0 +1,14 @@
+{
+  "jwt_secret": "uBWtWs4XLByAfchtL4Pa7Z_ejMZCx2pOtcmBx0JFOxJQpqXG7bl671PX_M44mWQK",
+  "credentials": [
+    {
+      "id": "bke2XNOLrroDODD1pHJXDw",
+      "public_key": "pQECAyYgASFYIB4w6cXJIR70AZIBYeRAy-wO5g8sNUawoOVBW4uK68NsIlgg7cIgFeE2yTIooiNH4pgSJRNknxXtkKwWHkLNfus_kSA",
+      "sign_count": 0,
+      "name": "admin passkey",
+      "created": 1784484850.988729
+    }
+  ],
+  "created": 1784484819.0321522,
+  "user_id": "cqFxvLyxdNC7nvg9ng3GTQ"
+}
