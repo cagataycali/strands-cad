@@ -338,9 +338,8 @@ def pointcloud_to_stl(
             faces_all = np.vstack([good[:, [0,1,2]], good[:, [0,1,3]],
                                     good[:, [0,2,3]], good[:, [1,2,3]]])
             faces_sorted = np.sort(faces_all, axis=1)
-            faces_str = faces_sorted.view([('a', faces_sorted.dtype)] * 3)
-            uniq, counts = np.unique(faces_str, return_counts=True)
-            boundary = uniq[counts == 1].view(faces_sorted.dtype).reshape(-1, 3)
+            uniq, counts = np.unique(faces_sorted, axis=0, return_counts=True)
+            boundary = uniq[counts == 1]
             mesh = trimesh.Trimesh(vertices=pts, faces=boundary)
         except Exception as e:
             return err(f"alpha shape failed: {e}. Try method='convex'.")
