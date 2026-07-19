@@ -1158,8 +1158,16 @@ function setupDockDrag(){
     const H=window.innerHeight;
     curH=Math.max(60, Math.min(H-40, startH+dy));
     d.style.height=curH+'px'; e.preventDefault(); }
+  let _lastTap=0;
   function up(){ if(!dragging) return; dragging=false; d.classList.remove('dockdragging');
-    if(!moved){ d.style.height=''; window.toggleDock(); return; }  // treat as tap → cycle
+    if(!moved){ d.style.height='';
+      const now=Date.now();
+      if(now-_lastTap<300){ // double-tap → jump full <-> default
+        _lastTap=0;
+        if(d.classList.contains('full')) applyCls('');
+        else applyCls('full');
+      } else { _lastTap=now; window.toggleDock(); }
+      return; }  // treat as tap → cycle
     // snap to nearest defined height
     const hs=snapHeights(); let best=hs[0], bd=1e9;
     hs.forEach(o=>{ const dd=Math.abs(o.px-curH); if(dd<bd){bd=dd;best=o;} });

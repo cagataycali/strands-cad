@@ -48,3 +48,8 @@ Verified telemetry PiP drags top-right→bottom-left and snaps (corner=bl, x 198
 Added harness invariant pip_drag_snaps (asserts real drag moves the pip >40px). All 12
 invariants PASS ✅ across 4 viewports. pytest 37 green. Both primary touch surfaces
 (chat sheet resize + pip repositioning) now behaviorally regression-guarded.
+
+## Iter 8 (16:31) — double-tap grip → jump full/default
+Added double-tap (within 300ms) on the sheet grip to snap between full and default —
+faster than dragging when you want max chat space. Single tap still cycles. Confirmed
+chat transcript already auto-scrolls (addMsg sets scrollTop). Harness PASS ✅, pytest 37 green.
