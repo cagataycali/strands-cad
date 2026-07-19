@@ -32,8 +32,11 @@ def mf3_pack(
     """Pack one or more STLs into a single .3mf file.
 
     Args:
-        items: List of {stl: <path>, name: <str>, position: [x,y,z]} entries.
+        items: List of {stl: <path>, name: <str>, position: [x,y,z], group: <str>} entries.
             Position is applied as a translation on the build plate.
+            Items sharing the same `group` are packed as ONE assembled object
+            with multiple component parts (multi-material: slicer keeps them
+            together and lets you assign a filament per part).
         output_3mf: Output .3mf path.
         title: 3MF title metadata.
 
@@ -53,17 +56,12 @@ def mf3_pack(
     build = ET.SubElement(model, f"{{{NS}}}build")
 
     packed = []
-    for i, it in enumerate(items, start=1):
-        stl_path = it.get("stl")
-        name = it.get("name", f"object_{i}")
-        pos = it.get("position", [0.0, 0.0, 0.0])
-        if not stl_path or not Path(stl_path).exists():
-            return err(f"stl not found for item {i}: {stl_path}")
-        try:
-            verts, tris = parse_stl(stl_path)
-        except Exception as e:
-            return err(f"failed parsing {stl_path}: {e}")
-        obj = ET.SubElement(resources, f"{{{NS}}}object", id=str(i), type="model", name=name)
+    next_id = 1
+
+    def _add_mesh_object(stl_path, name):
+        nonlocal next_id
+        verts, tris = parse_stl(stl_path)
+        obj = ET.SubElement(resources, f"{{{NS}}}object", id=str(next_id), type="model", name=name)
         mesh = ET.SubElement(obj, f"{{{NS}}}mesh")
         v_el = ET.SubElement(mesh, f"{{{NS}}}vertices")
         for x, y, z in verts:
@@ -71,10 +69,55 @@ def mf3_pack(
         t_el = ET.SubElement(mesh, f"{{{NS}}}triangles")
         for a, b, c in tris:
             ET.SubElement(t_el, f"{{{NS}}}triangle", v1=f"{a}", v2=f"{b}", v3=f"{c}")
-        dx, dy, dz = pos
-        transform = f"1 0 0 0 1 0 0 0 1 {dx} {dy} {dz}"
-        ET.SubElement(build, f"{{{NS}}}item", objectid=str(i), transform=transform)
-        packed.append({"name": name, "vertices": len(verts), "triangles": len(tris), "position": pos})
+        oid = next_id
+        next_id += 1
+        return oid, len(verts), len(tris)
+
+    # Validate + group items (preserving order)
+    groups: dict[str, list[dict]] = {}
+    singles: list[dict] = []
+    for i, it in enumerate(items, start=1):
+        stl_path = it.get("stl")
+        if not stl_path or not Path(stl_path).exists():
+            return err(f"stl not found for item {i}: {stl_path}")
+        g = it.get("group")
+        if g:
+            groups.setdefault(g, []).append(it)
+        else:
+            singles.append(it)
+
+    try:
+        # Grouped items → component assembly (one build item per group)
+        for gname, members in groups.items():
+            comp_ids = []
+            for m in members:
+                name = m.get("name", gname)
+                oid, nv, nt = _add_mesh_object(m["stl"], name)
+                comp_ids.append((oid, m))
+                packed.append({"name": name, "group": gname, "vertices": nv,
+                               "triangles": nt, "position": m.get("position", [0, 0, 0])})
+            asm = ET.SubElement(resources, f"{{{NS}}}object", id=str(next_id),
+                                type="model", name=gname)
+            comps = ET.SubElement(asm, f"{{{NS}}}components")
+            for oid, m in comp_ids:
+                dx, dy, dz = m.get("position", [0.0, 0.0, 0.0])
+                ET.SubElement(comps, f"{{{NS}}}component", objectid=str(oid),
+                              transform=f"1 0 0 0 1 0 0 0 1 {dx} {dy} {dz}")
+            ET.SubElement(build, f"{{{NS}}}item", objectid=str(next_id),
+                          transform="1 0 0 0 1 0 0 0 1 0 0 0")
+            next_id += 1
+
+        # Ungrouped items → standalone objects (original behavior)
+        for it in singles:
+            name = it.get("name", f"object_{next_id}")
+            pos = it.get("position", [0.0, 0.0, 0.0])
+            oid, nv, nt = _add_mesh_object(it["stl"], name)
+            dx, dy, dz = pos
+            ET.SubElement(build, f"{{{NS}}}item", objectid=str(oid),
+                          transform=f"1 0 0 0 1 0 0 0 1 {dx} {dy} {dz}")
+            packed.append({"name": name, "vertices": nv, "triangles": nt, "position": pos})
+    except Exception as e:
+        return err(f"failed packing: {e}")
 
     xml_bytes = b'<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(model)
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
