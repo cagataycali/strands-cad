@@ -447,7 +447,7 @@
 
   <!-- DOCK: chat + voice — overlays everything, collapsible -->
   <div class="dock" id="dock">
-    <div class="dockgrip" id="dockGrip" onclick="toggleDock()" title="collapse/expand chat">⌄</div>
+    <div class="dockgrip" id="dockGrip" title="drag to resize · tap to cycle"></div>
     <div class="transcript" id="chatlog"></div>
     <div class="dockin">
       <button class="micbtn" id="micBtn" onclick="toggleVoice()" title="voice">🎙️</button>
@@ -1158,6 +1158,8 @@ function setupDockDrag(){
     d.style.height=''; applyCls(best.cls); }
   g.addEventListener('touchstart',down,{passive:false}); window.addEventListener('touchmove',move,{passive:false}); window.addEventListener('touchend',up);
   g.addEventListener('mousedown',down); window.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+  // desktop: grip is a simple collapse toggle (no sheet drag there)
+  g.addEventListener('click',()=>{ const mob=window.matchMedia('(max-width:760px)').matches; if(!mob) window.toggleDock(); });
   window.__dockDraggable=true;
 }
 setupDockDrag();

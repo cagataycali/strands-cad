@@ -55,6 +55,22 @@ def run():
                     if grip:
                         gb = box(pg, "#dockGrip")
                         chk("grip_touch_target", gb and gb["h"]>=28, f"grip h={gb['h'] if gb else '?'} (want >=28)")
+                    # INVARIANT 5b: dragging the grip UP must actually grow the sheet, DOWN must shrink it
+                    try:
+                        h0 = pg.eval_on_selector("#dock","e=>e.getBoundingClientRect().height")
+                        gc = pg.eval_on_selector("#dockGrip","e=>{const r=e.getBoundingClientRect();return {cx:r.left+r.width/2,cy:r.top+r.height/2}}")
+                        pg.mouse.move(gc["cx"],gc["cy"]); pg.mouse.down()
+                        for i in range(1,13): pg.mouse.move(gc["cx"],gc["cy"]-30*i); pg.wait_for_timeout(10)
+                        pg.mouse.up(); pg.wait_for_timeout(400)
+                        h1 = pg.eval_on_selector("#dock","e=>e.getBoundingClientRect().height")
+                        gc2 = pg.eval_on_selector("#dockGrip","e=>{const r=e.getBoundingClientRect();return {cx:r.left+r.width/2,cy:r.top+r.height/2}}")
+                        pg.mouse.move(gc2["cx"],gc2["cy"]); pg.mouse.down()
+                        for i in range(1,13): pg.mouse.move(gc2["cx"],gc2["cy"]+30*i); pg.wait_for_timeout(10)
+                        pg.mouse.up(); pg.wait_for_timeout(400)
+                        h2 = pg.eval_on_selector("#dock","e=>e.getBoundingClientRect().height")
+                        chk("dock_drag_resizes", h1>h0+40 and h2<h1-40, f"h0={h0:.0f} up={h1:.0f} down={h2:.0f}")
+                    except Exception as ex:
+                        chk("dock_drag_resizes", False, f"drag sim error {ex}")
                 # INVARIANT 6: no console errors
                 # (collected via listener below)
                 r["console_errors"] = pg.__dict__.get("_cerr", [])

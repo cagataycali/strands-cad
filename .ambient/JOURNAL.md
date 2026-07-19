@@ -24,3 +24,11 @@ Mobile telemetry PiP width min(62vw,220)→min(52vw,176) so top-right + bottom-l
 corners no longer collide on 360px screens.
 Harness: 1→0 fails — PASS ✅ all 4 viewports. pytest 37 green.
 All 9 baseline issues resolved. Moving to P2 polish.
+
+## Iter 4 (16:22) — fix drag/click conflict + add behavioral drag invariant
+BUG: grip kept onclick=toggleDock → after a drag, the synthetic click re-cycled the
+sheet, corrupting state (drag-down did nothing). FIX: removed grip onclick; setupDockDrag
+tap-vs-drag logic is now authoritative on mobile; desktop grip = click-toggle only.
+Added harness invariant dock_drag_resizes: simulates real UP-drag (grows) + DOWN-drag
+(shrinks) and asserts height changes. Verified: 371→792 up, 792→371 down.
+Harness: PASS ✅ (now incl. behavioral drag). pytest 37 green.
