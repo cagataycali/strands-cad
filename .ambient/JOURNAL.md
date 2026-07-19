@@ -53,3 +53,12 @@ invariants PASS ✅ across 4 viewports. pytest 37 green. Both primary touch surf
 Added double-tap (within 300ms) on the sheet grip to snap between full and default —
 faster than dragging when you want max chat space. Single tap still cycles. Confirmed
 chat transcript already auto-scrolls (addMsg sets scrollTop). Harness PASS ✅, pytest 37 green.
+
+## 2026-07-19 17:xx — fix: "Invalid typed array length" on load (telemetry blocked)
+Root cause: loadModels() auto-loaded MODELS[0] = cc_monogram.gcode. loadModel() set a
+"STL only" label for non-STL but did NOT return — it fell through to STLLoader.parse()
+on gcode bytes, reading a garbage triangle count (16.5B) → RangeError: Invalid typed
+array length. The uncaught throw aborted the boot chain, so telemetry never rendered.
+Fix (2 lines): (1) early-return in loadModel() for non-STL (dispose preview mesh + loadMeta only);
+(2) auto-load the first STL model instead of MODELS[0]. Verified: 0 console errors,
+telemetry visible, preview shows cc_monogram.stl. uicheck PASS, 36 pass/1 skip.

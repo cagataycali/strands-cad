@@ -650,7 +650,7 @@ window.loadModel = async (name)=>{
   if(!name) return; initPreview(); currentModel=name;
   document.querySelectorAll('.mitem').forEach(x=>x.classList.toggle('sel',x.dataset.name===name));
   $('#objName').textContent=''; $('#previewName').textContent=name; const pm=$('#previewNameMob'); if(pm)pm.textContent=name;
-  if(!name.toLowerCase().endsWith('.stl')){ $('#previewName').textContent=name+' (preview = STL only)'; }
+  if(!name.toLowerCase().endsWith('.stl')){ $('#previewName').textContent=name+' (preview = STL only)'; if(pvMesh){ pvScene.remove(pvMesh); pvMesh.geometry.dispose(); pvMesh.material.dispose(); pvMesh=null; } loadMeta(name); return; }
   try{
     const r=await fetch('/api/model/'+encodeURIComponent(name),{headers:authHeaders()});
     if(!r.ok){ toast('load failed'); return; }
@@ -683,7 +683,7 @@ window.loadModels = async ()=>{ try{
   const d=await (await fetch('/api/models',{headers:authHeaders()})).json();
   MODELS=d.models||[]; renderMenu();
   const psel=$('#plateAddSel'); if(psel){ psel.innerHTML=''; MODELS.forEach(m=>{ const o=document.createElement('option'); o.value=m.name; o.textContent=m.name; psel.appendChild(o); }); }
-  if(!currentModel && MODELS.length){ loadModel(MODELS[0].name); }
+  if(!currentModel && MODELS.length){ const first=(MODELS.find(m=>(m.ext||'').toLowerCase()==='stl'||m.name.toLowerCase().endsWith('.stl'))||MODELS[0]); loadModel(first.name); }
 }catch(e){ toast('models load failed'); } };
 async function addModelToPlate(name){
   await fetch('/api/plate/add',{method:'POST',headers:J(),body:JSON.stringify({source:name,color:selColor||''})});
