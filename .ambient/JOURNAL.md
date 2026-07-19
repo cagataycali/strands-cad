@@ -42,3 +42,9 @@ Added harness invariants: no_h_overflow (all vp) + chat_input_tall (>=40px) — 
 confirming layout has no hidden horizontal scroll and the chat field is always tappable.
 Visual: collapsed sheet's grip pill now "breathes" (gentle width/opacity pulse) to invite
 the pull-up gesture. Harness PASS ✅ (11 invariants now). pytest 37 green.
+
+## Iter 7 (16:29) — behavioral guard: PiP corner-snap drag
+Verified telemetry PiP drags top-right→bottom-left and snaps (corner=bl, x 198→16, y 48→101).
+Added harness invariant pip_drag_snaps (asserts real drag moves the pip >40px). All 12
+invariants PASS ✅ across 4 viewports. pytest 37 green. Both primary touch surfaces
+(chat sheet resize + pip repositioning) now behaviorally regression-guarded.

@@ -84,6 +84,19 @@ def run():
                 chk("no_h_overflow", sw["sw"] <= sw["iw"]+2, f"scrollWidth={sw['sw']} > innerWidth={sw['iw']}")
                 ci = box(pg, "#chatInput")
                 if ci: chk("chat_input_tall", ci["h"]>=40, f"chatInput h={ci['h']:.0f} (want >=40)")
+                # INVARIANT 9: telemetry pip is draggable and snaps corners (behavioral)
+                try:
+                    tb0 = pg.eval_on_selector("#telempip","e=>{const r=e.getBoundingClientRect();return {x:r.left,y:r.top}}")
+                    hc = pg.eval_on_selector("#telempip [data-drag]","e=>{const r=e.getBoundingClientRect();return{cx:r.left+r.width/2,cy:r.top+r.height/2}}")
+                    pg.mouse.move(hc["cx"],hc["cy"]); pg.mouse.down()
+                    # drag toward opposite side (down + horizontally inward)
+                    tox = -8 if tb0["x"]>w/2 else 8
+                    for i in range(1,13): pg.mouse.move(hc["cx"]+tox*i, hc["cy"]+36*i); pg.wait_for_timeout(8)
+                    pg.mouse.up(); pg.wait_for_timeout(500)
+                    tb1 = pg.eval_on_selector("#telempip","e=>{const r=e.getBoundingClientRect();return {x:r.left,y:r.top}}")
+                    chk("pip_drag_snaps", abs(tb1["x"]-tb0["x"])+abs(tb1["y"]-tb0["y"]) > 40, f"pip barely moved {tb0}->{tb1}")
+                except Exception as ex:
+                    chk("pip_drag_snaps", False, f"pip drag error {ex}")
                 r["console_errors"] = pg.__dict__.get("_cerr", [])
             except Exception as e:
                 r["error"] = str(e); fails.append(f"[{name}] EXCEPTION {e}")
