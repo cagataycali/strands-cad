@@ -103,9 +103,10 @@ def _build():
                 return {"status": "success", "content": [{"text":
                     f"Ready to print {exp['objects']} parts ({exp['rel']}). "
                     "Call again with confirm=True to START the physical print."}], **exp}
-            sjid = _jobs.start_slice(exp["rel"])
+            sjid = _jobs.start_slice(exp["rel"], then_print=True,
+                                     use_ams=bool(exp.get("use_ams", False)))
             return {"status": "success", "content": [{"text":
-                    f"slicing colored plate ({exp['rel']}), job {sjid}; will upload+print"}],
+                    f"slicing colored plate ({exp['rel']}), job {sjid}; will auto-upload+print when slice completes"}],
                     "slice_job": sjid, "exported": exp}
 
         @tool

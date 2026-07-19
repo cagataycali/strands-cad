@@ -55,7 +55,8 @@ def recent(limit: int = 20) -> list:
 
 
 # ── slice job ───────────────────────────────────────────────────────────────
-def start_slice(input_name: str, profile: str = "", printer_model: str = "") -> str:
+def start_slice(input_name: str, profile: str = "", printer_model: str = "",
+                then_print: bool = False, use_ams: bool = True, plate_index: int = 1) -> str:
     """Slice an STL/3MF from the workdir → gcode/3mf in the same dir."""
     from strands_cad.dashboard import config_store, models
     cfg = config_store.load()
@@ -110,6 +111,14 @@ def start_slice(input_name: str, profile: str = "", printer_model: str = "") -> 
                  "filament_g": est.get("filament_g")})
             _log(jid, f"sliced → {Path(gpath).name} "
                       f"({est.get('estimated_time_hms','?')}, {est.get('filament_g','?')}g)")
+            if then_print:
+                gname = Path(gpath).name
+                _log(jid, f"→ chaining to print: {gname}")
+                pjid = start_print(gname, use_ams=use_ams, plate_index=plate_index)
+                _set(jid, result={"gcode": gpath, "rel": gname,
+                     "time": est.get("estimated_time_hms"),
+                     "filament_g": est.get("filament_g"), "print_job": pjid})
+                _log(jid, f"print job queued: {pjid}")
         except Exception as e:
             _set(jid, state="error", error=str(e))
             _log(jid, f"exception: {e}")

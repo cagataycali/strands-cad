@@ -467,10 +467,12 @@ async def plate_print(request: Request):
     exp = _plate.export_3mf()
     if not exp.get("ok"):
         return JSONResponse({"error": exp.get("error", "export failed")}, status_code=400)
-    # slice then print the exported colored 3mf
-    jid = _jobs.start_slice(exp["rel"])
+    # slice then (optionally) auto upload+print the exported colored 3mf
+    auto = bool(b.get("auto_print", True))
+    jid = _jobs.start_slice(exp["rel"], then_print=auto,
+                            use_ams=bool(b.get("use_ams", False)))
     return {"job_id": jid, "exported": exp["rel"], "then": "print",
-            "auto_print": bool(b.get("auto_print", True))}
+            "auto_print": auto}
 
 
 # ── telegram bridge ─────────────────────────────────────────────────────────
