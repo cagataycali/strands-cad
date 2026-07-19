@@ -253,10 +253,16 @@
     .dock.half{height:70dvh}
     .dock.full{height:calc(100dvh - 52px)}               /* camera still peeks at very top */
     .dock.collapsed{height:calc(84px + var(--safe-b));transform:none!important}
-    /* grip = a pill you tap to cycle sheet height */
-    .dock .dockgrip{display:flex!important;position:absolute;top:7px;left:50%;transform:translateX(-50%);
-          width:46px;height:5px;border-radius:3px;background:rgba(255,255,255,.34);border:0;color:transparent;
-          font-size:0;padding:0}
+    /* grip = a big invisible drag/tap zone; the visible pill is drawn via ::before.
+       Tall enough (>=44px) to be an easy finger target; supports DRAG to resize. */
+    .dock .dockgrip{display:flex!important;position:absolute;top:0;left:50%;transform:translateX(-50%);
+          width:140px;height:34px;border-radius:0 0 14px 14px;background:transparent;border:0;color:transparent;
+          font-size:0;padding:0;touch-action:none;cursor:grab;z-index:2}
+    .dock .dockgrip::before{content:"";position:absolute;top:9px;left:50%;transform:translateX(-50%);
+          width:46px;height:5px;border-radius:3px;background:rgba(255,255,255,.42);transition:width .2s,background .2s}
+    .dock .dockgrip:active{cursor:grabbing}
+    .dock .dockgrip:active::before{width:60px;background:rgba(255,255,255,.7)}
+    .dock.dockdragging{transition:none!important}
     .dock .transcript{max-height:none;flex:1 1 auto;min-height:0;overflow-y:auto;margin:16px 0 8px}
     .dock.collapsed .transcript{display:none}
     .dock.collapsed #voiceStatus{display:none}
@@ -1119,6 +1125,42 @@ window.toggleDock=()=>{ const d=document.getElementById('dock'); const g=documen
     return;
   }
   d.classList.toggle('collapsed'); g.textContent=d.classList.contains('collapsed')?'⌃':'⌄'; };
+
+// ── dock finger-drag (mobile): drag the grip to fluidly resize the chat sheet ──
+function setupDockDrag(){
+  const d=document.getElementById('dock'), g=document.getElementById('dockGrip');
+  if(!d||!g) return;
+  // snap heights (px) computed from viewport; matches the CSS classes
+  function snapHeights(){ const H=window.innerHeight;
+    return [ {cls:'collapsed', px:84}, {cls:'', px:Math.round(H*0.44)},
+             {cls:'half', px:Math.round(H*0.70)}, {cls:'full', px:H-52} ]; }
+  function applyCls(cls){ d.classList.remove('half','full','collapsed'); if(cls) d.classList.add(cls);
+    // re-snap floating pips above the new sheet height
+    setTimeout(()=>['platepip','telempip'].forEach(id=>{const pip=document.getElementById(id);
+      if(pip&&!pip.classList.contains('full')) snapPip(pip,localStorage.getItem(id+'_corner')||(id==='telempip'?'tr':'bl'),true);}),320); }
+  let dragging=false, startY=0, startH=0, curH=0, moved=false;
+  function pt(e){ return e.touches?e.touches[0]:e; }
+  function down(e){ const mob=window.matchMedia('(max-width:760px)').matches; if(!mob) return;
+    dragging=true; moved=false; const t=pt(e); startY=t.clientY;
+    startH=d.getBoundingClientRect().height; curH=startH;
+    d.classList.add('dockdragging'); e.preventDefault(); }
+  function move(e){ if(!dragging) return; const t=pt(e);
+    const dy=startY-t.clientY;                 // drag up = grow
+    if(Math.abs(dy)>4) moved=true;
+    const H=window.innerHeight;
+    curH=Math.max(60, Math.min(H-40, startH+dy));
+    d.style.height=curH+'px'; e.preventDefault(); }
+  function up(){ if(!dragging) return; dragging=false; d.classList.remove('dockdragging');
+    if(!moved){ d.style.height=''; window.toggleDock(); return; }  // treat as tap → cycle
+    // snap to nearest defined height
+    const hs=snapHeights(); let best=hs[0], bd=1e9;
+    hs.forEach(o=>{ const dd=Math.abs(o.px-curH); if(dd<bd){bd=dd;best=o;} });
+    d.style.height=''; applyCls(best.cls); }
+  g.addEventListener('touchstart',down,{passive:false}); window.addEventListener('touchmove',move,{passive:false}); window.addEventListener('touchend',up);
+  g.addEventListener('mousedown',down); window.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+  window.__dockDraggable=true;
+}
+setupDockDrag();
 
 // ── boot ─────────────────────────────────────────────────────────────
 checkAuth();
