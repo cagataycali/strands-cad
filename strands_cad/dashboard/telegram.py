@@ -138,13 +138,21 @@ def _handle(text: str, chat_id: str):
         name = text.split(" ", 1)[1].strip()
         jid = jobs.start_print(name)
         notify(f"🖨️ print job {jid} started for {name}", chat_id)
+    elif t in ("/help", "help", "/start"):
+        notify("Just talk to me in plain language — I'm the strands-cad "
+               "printer agent (design → slice → print). Quick commands:\n"
+               "/status · /snapshot · /pause · /resume · /stop · "
+               "/print <file>", chat_id)
     elif t.startswith("/ask ") or t.startswith("/cad "):
         q = text.split(" ", 1)[1]
         r = chat_agent.ask(q)
         notify(r.get("reply") or ("⚠️ " + str(r.get("error"))), chat_id)
     else:
-        notify("commands: /status /snapshot /pause /resume /stop "
-               "/print <file> /ask <request>", chat_id)
+        # Anything that isn't a defined command → natural language to the agent.
+        # Strip a leading unknown slash-command token if present (e.g. "/foo ...").
+        q = text.strip()
+        r = chat_agent.ask(q)
+        notify(r.get("reply") or ("⚠️ " + str(r.get("error"))), chat_id)
 
 
 def _loop():

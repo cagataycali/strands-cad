@@ -221,23 +221,58 @@
   .sendbtn{flex:0 0 auto;width:46px;height:46px;border-radius:50%;border:1px solid var(--accent);
            background:var(--accent);color:#07120a;font-size:18px;cursor:pointer}
 
-  /* ===== MOBILE — YouTube-style: camera on top, chat fullscreen below ===== */
+  /* ===== MOBILE — camera is a FULL-SCREEN backdrop; chat is a translucent
+     glass sheet that expands from a peek all the way up to 100% over the camera.
+     Plate + telemetry float as compact PiPs. Everything coexists on one screen. ===== */
   @media(max-width:760px){
     #app{height:100dvh}
-    .stage{flex:0 0 auto;height:34vh;display:block}     /* camera hero pinned to top like a YT player */
-    .rail{display:none}                                 /* model menu accessible via ☰ sheet on mobile */
+    /* camera fills the ENTIRE screen behind everything */
+    .stage{position:fixed;inset:0;height:100dvh;width:100vw;display:block;z-index:1}
+    .rail{display:none}                                 /* model menu → ☰ sheet */
     .camstage{width:100%;height:100%}
-    /* the dock (chat) takes the whole rest of the screen — full immersive chat */
-    .dock{position:fixed;top:calc(34vh + var(--safe-t));left:0;right:0;bottom:0;z-index:20;
-          background:var(--bg);backdrop-filter:none;border-top:1px solid var(--line);
-          display:flex;flex-direction:column;padding:10px 12px calc(10px + var(--safe-b));transform:none!important}
-    .dock.collapsed{transform:none!important}
-    .dock .dockgrip{display:none}
-    .dock .transcript{max-height:none;flex:1 1 auto;margin-bottom:8px}
-    /* plate + telemetry float small on top of the camera area */
-    .platepip{width:132px}.telempip{width:132px}
+    .camstage img{object-fit:cover}                     /* fill, no letterbox */
+
+    /* header floats as a translucent bar over the camera */
+    header{position:fixed;top:0;left:0;right:0;z-index:46;
+           background:linear-gradient(180deg,rgba(8,9,14,.72),rgba(8,9,14,0));
+           border-bottom:0;padding:calc(var(--safe-t) + 8px) 12px 14px}
+    .brand{font-size:14px;text-shadow:0 1px 3px #000}
+    header .pill{display:none}                           /* hide pills on mobile (state shown in telemetry PiP) */
+    .hbtns{gap:4px}
+    .iconbtn{padding:7px 8px;font-size:15px;line-height:1;border-radius:9px;
+             overflow:hidden;white-space:nowrap;max-width:40px}   /* compact: emoji shows, label clipped */
+
+    /* CHAT = frosted-glass bottom sheet, snaps: peek → half → full */
+    .dock{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:45;height:44dvh;
+          background:linear-gradient(180deg,rgba(10,11,17,.28),rgba(10,11,17,.86) 34%);
+          -webkit-backdrop-filter:blur(22px) saturate(1.2);backdrop-filter:blur(22px) saturate(1.2);
+          border-top:1px solid rgba(255,255,255,.12);border-radius:22px 22px 0 0;
+          box-shadow:0 -18px 50px rgba(0,0,0,.5);
+          display:flex;flex-direction:column;padding:14px 12px calc(10px + var(--safe-b));
+          transition:height .3s cubic-bezier(.32,.72,0,1);transform:none!important}
+    .dock.half{height:70dvh}
+    .dock.full{height:calc(100dvh - 52px)}               /* camera still peeks at very top */
+    .dock.collapsed{height:calc(84px + var(--safe-b));transform:none!important}
+    /* grip = a pill you tap to cycle sheet height */
+    .dock .dockgrip{display:flex!important;position:absolute;top:7px;left:50%;transform:translateX(-50%);
+          width:46px;height:5px;border-radius:3px;background:rgba(255,255,255,.34);border:0;color:transparent;
+          font-size:0;padding:0}
+    .dock .transcript{max-height:none;flex:1 1 auto;min-height:0;overflow-y:auto;margin:16px 0 8px}
+    .dock.collapsed .transcript{display:none}
+    .dock.collapsed #voiceStatus{display:none}
+    .msg{max-width:92%}
+
     /* mobile model sheet trigger */
     .mobmenu{display:flex!important}
+
+    /* PiPs hover small over the camera; telemetry gets enough room for its 3 temp cards */
+    .platepip{width:132px}
+    .telempip{width:min(62vw,220px);max-width:none}
+    .telempip.min{width:132px}
+    .telempip .telembody{max-height:44dvh}
+    .temps{gap:6px}
+    .temp{padding:6px 4px}
+    .temp .val{font-size:15px}
   }
   .mobmenu{display:none;position:fixed;top:calc(var(--safe-t) + 8px);right:12px;z-index:55;
         width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--panel);
@@ -1006,6 +1041,9 @@ function snapPip(pip,corner,animate=true){
   if(!animate) requestAnimationFrame(()=>pip.style.transition='');
 }
 function getDockH(){ const d=document.getElementById('dock'); if(!d) return 90;
+  const mob=window.matchMedia('(max-width:760px)').matches;
+  if(mob){ // PiPs must clear the glass sheet; but if sheet is tall (half/full) just clamp so pips stay visible up top
+    const h=d.offsetHeight; return Math.min(h, Math.round(window.innerHeight*0.42)); }
   return d.classList.contains('collapsed')?60:Math.min(d.offsetHeight,window.innerHeight*0.5); }
 function showSnapZones(active){ ['tl','tr','bl','br'].forEach(c=>{
   const z=document.getElementById('sz-'+c); if(!z)return;
@@ -1065,6 +1103,18 @@ window.plateToggleBody=(e)=>{ e.stopPropagation(); const pip=document.getElement
 
 // ── dock collapse/expand ────────────────────────────────────────────────
 window.toggleDock=()=>{ const d=document.getElementById('dock'); const g=document.getElementById('dockGrip');
+  const mob=window.matchMedia('(max-width:760px)').matches;
+  if(mob){
+    // cycle sheet size: default → half → full → collapsed(peek) → default …
+    const order=['','half','full','collapsed'];
+    const cur=['half','full','collapsed'].find(c=>d.classList.contains(c))||'';
+    const next=order[(order.indexOf(cur)+1)%order.length];
+    d.classList.remove('half','full','collapsed'); if(next) d.classList.add(next);
+    // re-snap floating pips above the new sheet height
+    setTimeout(()=>['platepip','telempip'].forEach(id=>{const pip=document.getElementById(id);
+      if(pip&&!pip.classList.contains('full')) snapPip(pip,localStorage.getItem(id+'_corner')||(id==='telempip'?'tr':'bl'),true);}),330);
+    return;
+  }
   d.classList.toggle('collapsed'); g.textContent=d.classList.contains('collapsed')?'⌃':'⌄'; };
 
 // ── boot ─────────────────────────────────────────────────────────────
