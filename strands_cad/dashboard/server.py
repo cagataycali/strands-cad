@@ -470,7 +470,7 @@ async def plate_print(request: Request):
     # slice then (optionally) auto upload+print the exported colored 3mf
     auto = bool(b.get("auto_print", True))
     jid = _jobs.start_slice(exp["rel"], then_print=auto,
-                            use_ams=bool(b.get("use_ams", False)))
+                            use_ams=bool(b.get("use_ams", True)))
     return {"job_id": jid, "exported": exp["rel"], "then": "print",
             "auto_print": auto}
 

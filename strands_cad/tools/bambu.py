@@ -129,17 +129,24 @@ def bambu_send(file_path: str, plate_index: int = 1, use_ams: bool = True) -> di
     # Bambu supports FTP over TLS for file upload (port 990). For simplicity,
     # we require the file to already exist on the printer's SD, or use the
     # Bambu Handy app to upload. Here we send the "start print" command.
+    is_gcode = src.suffix.lower() == ".gcode"
+    # Bambu firmware: a 3MF *project* references its internal
+    # Metadata/plate_N.gcode; a bare .gcode on SD must reference the file
+    # itself (Metadata/plate_N.gcode does NOT exist inside a plain gcode →
+    # the printer silently rejects the job). AMS mapping only exists inside a
+    # 3MF, so use_ams is meaningful only for 3MF projects.
+    param = src.name if is_gcode else f"Metadata/plate_{plate_index}.gcode"
     payload = {
         "print": {
             "sequence_id": str(int(time.time())),
             "command": "project_file",
-            "param": f"Metadata/plate_{plate_index}.gcode",
+            "param": param,
             "subtask_name": src.stem,
             "url": f"file:///mnt/sdcard/{src.name}",
             "bed_type": "auto",
             "timelapse": True,
             "flow_cali": False,
-            "use_ams": use_ams,
+            "use_ams": (use_ams and not is_gcode),
         }
     }
     client.publish(f"device/{serial}/request", json.dumps(payload))
@@ -220,7 +227,7 @@ def bambu_upload(file_path: str, remote_name: str = "") -> dict:
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         ftps = ImplicitFTPS(context=ctx)
-        ftps.connect(ip, 990, timeout=15)
+        ftps.connect(ip, 990, timeout=45)
         ftps.login("bblp", access)
         ftps.prot_p()
         with open(src, "rb") as f:
