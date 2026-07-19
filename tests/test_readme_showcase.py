@@ -212,3 +212,22 @@ def test_scad_probe_and_defines(outdir):
     _ok(scad_render_stl(str(scad), stl, defines={"W": 50}))
     b = _ok(stl_bbox(stl))
     assert abs(b["size"][0] - 50) < 0.5
+
+
+# ---------- Example scripts stay runnable ----------
+
+@pytest.mark.skipif(not _mujoco_available(), reason="mujoco not installed")
+def test_example_robot_training_props(tmp_path, monkeypatch):
+    """examples/robot_training_props.py must run end-to-end (README links it)."""
+    import runpy
+    import sys
+    from pathlib import Path
+    script = Path(__file__).parent.parent / "examples" / "robot_training_props.py"
+    assert script.exists()
+    # Redirect its output dir to tmp by faking __file__ location? Simpler:
+    # run it as-is; it writes to examples/props/ which is gitignored.
+    monkeypatch.setattr(sys, "argv", [str(script)])
+    try:
+        runpy.run_path(str(script), run_name="__main__")
+    except SystemExit as e:
+        assert e.code == 0
