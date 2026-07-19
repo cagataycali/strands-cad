@@ -197,6 +197,15 @@ def slice_estimate(gcode_file: str) -> dict:
         h, r = divmod(int(est_sec), 3600)
         m, s = divmod(r, 60)
         hms = f"{h}h{m:02d}m{s:02d}s"
-    return ok(f"time={hms or '?'}, filament={fil_g or '?'} g",
+    # Bambu base profiles ship density=0 → weight header reads 0.00.
+    # Fall back to computing from filament length (1.75mm dia, PLA 1.24 g/cm³).
+    fil_g_estimated = False
+    if (fil_g is None or fil_g == 0) and fil_mm:
+        area_mm2 = 3.14159265 * (1.75 / 2) ** 2
+        fil_g = round(fil_mm * area_mm2 / 1000 * 1.24, 2)
+        fil_g_estimated = True
+    fil_note = "~" if fil_g_estimated else ""
+    return ok(f"time={hms or '?'}, filament={fil_note}{fil_g or '?'} g",
               estimated_seconds=est_sec, estimated_time_hms=hms,
-              filament_g=fil_g, filament_mm=fil_mm)
+              filament_g=fil_g, filament_mm=fil_mm,
+              filament_g_estimated=fil_g_estimated)
