@@ -28,6 +28,7 @@ from strands_cad.tools.neural_tools import (
     neural_text_to_stl, neural_image_to_stl,
     pointcloud_from_stl, pointcloud_to_stl, pointcloud_downsample,
 )
+from strands_cad.tools.imagine import imagine, imagine_parse, imagine_variations
 
 __all__ = [
     "scad_probe", "scad_render_stl", "scad_render_png", "scad_validate",
@@ -48,4 +49,5 @@ __all__ = [
     "cq_render_stl", "cq_render_step", "cq_import_step", "cq_render_svg",
     "neural_text_to_stl", "neural_image_to_stl",
     "pointcloud_from_stl", "pointcloud_to_stl", "pointcloud_downsample",
+    "imagine", "imagine_parse", "imagine_variations",
 ]
