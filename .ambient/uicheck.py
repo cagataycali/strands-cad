@@ -55,6 +55,11 @@ def run():
                     if grip:
                         gb = box(pg, "#dockGrip")
                         chk("grip_touch_target", gb and gb["h"]>=28, f"grip h={gb['h'] if gb else '?'} (want >=28)")
+                    # INVARIANT 7 (mobile): pip control buttons must be an easy touch target (>=30px)
+                    btn = pg.query_selector("#telempip .pipbtns button")
+                    if btn:
+                        bb = pg.eval_on_selector("#telempip .pipbtns button","e=>{const r=e.getBoundingClientRect();return {w:r.width,h:r.height}}")
+                        chk("pip_btn_touch", bb["w"]>=30 and bb["h"]>=30, f"pip btn {bb['w']:.0f}x{bb['h']:.0f} (want >=30)")
                     # INVARIANT 5b: dragging the grip UP must actually grow the sheet, DOWN must shrink it
                     try:
                         h0 = pg.eval_on_selector("#dock","e=>e.getBoundingClientRect().height")

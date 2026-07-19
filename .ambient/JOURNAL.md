@@ -32,3 +32,7 @@ tap-vs-drag logic is now authoritative on mobile; desktop grip = click-toggle on
 Added harness invariant dock_drag_resizes: simulates real UP-drag (grows) + DOWN-drag
 (shrinks) and asserts height changes. Verified: 371→792 up, 792→371 down.
 Harness: PASS ✅ (now incl. behavioral drag). pytest 37 green.
+
+## Iter 5 (16:25) — bigger pip control buttons on mobile (P1 touch targets)
+Mobile: .pipbtns button 22px→32px, font 11→14, gap 4→6, piphead padding bumped.
+Added harness invariant pip_btn_touch (>=30px). Harness PASS ✅, pytest 37 green.
