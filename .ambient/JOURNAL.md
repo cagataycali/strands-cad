@@ -18,3 +18,9 @@ Added setupDockDrag(): touch/mouse drag on grip fluidly resizes sheet; snaps to
 collapsed/44%/70%/full; no-move = tap→cycle (backward compat). Sets window.__dockDraggable.
 Harness: 5→1 fails. dock_finger_draggable + grip_touch_target PASS. pytest 37 green.
 Remaining: android360 telem/plate overlap.
+
+## Iter 3 (16:19) — fix android360 PiP overlap → ALL GREEN ✅
+Mobile telemetry PiP width min(62vw,220)→min(52vw,176) so top-right + bottom-left
+corners no longer collide on 360px screens.
+Harness: 1→0 fails — PASS ✅ all 4 viewports. pytest 37 green.
+All 9 baseline issues resolved. Moving to P2 polish.
