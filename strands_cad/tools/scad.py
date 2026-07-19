@@ -27,7 +27,8 @@ def _defines_args(defines: dict | None) -> list[str]:
         elif isinstance(v, (int, float)):
             args += ["-D", f"{k}={v}"]
         else:
-            args += ["-D", f'{k}="{v}"']
+            esc = str(v).replace("\\", "\\\\").replace('"', '\\"')
+            args += ["-D", f'{k}="{esc}"']
     return args
 
 
