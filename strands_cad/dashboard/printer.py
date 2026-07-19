@@ -113,6 +113,8 @@ class BambuPrinter:
             "total_layers": s.get("total_layer_num"),
             "remaining_min": s.get("mc_remaining_time"),
             "subtask_name": s.get("subtask_name"),
+            "sdcard": s.get("sdcard"),
+            "nozzle_count": 2 if s.get("2D") is not None else 1,
             "temps": {
                 "nozzle": s.get("nozzle_temper"),
                 "nozzle_target": s.get("nozzle_target_temper"),

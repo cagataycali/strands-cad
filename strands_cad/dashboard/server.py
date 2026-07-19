@@ -28,6 +28,13 @@ import logging
 import os
 import sys
 import threading
+
+# Load .env (printer creds, telegram, thinker knobs) before anything reads env
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    _load_dotenv()
+except Exception:
+    pass
 from pathlib import Path
 from typing import Optional
 
@@ -43,6 +50,14 @@ from fastapi.responses import (JSONResponse, HTMLResponse, Response,
 from strands_cad.dashboard import auth as _auth
 from strands_cad.dashboard import camera as _camera
 from strands_cad.dashboard import printer as _printer
+from strands_cad.dashboard import config_store as _config
+from strands_cad.dashboard import models as _models
+from strands_cad.dashboard import jobs as _jobs
+from strands_cad.dashboard import chat_agent as _chat
+from strands_cad.dashboard import realtime as _realtime
+from strands_cad.dashboard import plate as _plate
+from strands_cad.dashboard import telegram as _telegram
+from strands_cad.dashboard import thinker as _thinker
 
 HERE = Path(__file__).resolve().parent
 FRONTEND = HERE / "frontend"
@@ -214,6 +229,317 @@ async def camera_stream():
     return StreamingResponse(
         gen(), media_type=f"multipart/x-mixed-replace; boundary={boundary}",
         headers={"Cache-Control": "no-store, no-cache", "Pragma": "no-cache"})
+
+
+# ── config (live settings, neon-the-g1 parity) ─────────────────────────────
+@app.get("/api/config")
+async def config_get():
+    return _config.redacted()
+
+
+@app.post("/api/config")
+async def config_post(request: Request):
+    patch = await request.json()
+    return _config.update(patch)
+
+
+# ── models (3D assets for the viewer) ──────────────────────────────────────
+@app.get("/api/models")
+async def models_list():
+    return {"workdir": _config.get("workdir"), "models": _models.list_models()}
+
+
+@app.get("/api/model/meta/{name:path}")
+async def model_meta(name: str):
+    return _models.meta(name)
+
+
+@app.get("/api/model/{name:path}")
+async def model_file(name: str):
+    data = _models.read_bytes(name)
+    if data is None:
+        raise HTTPException(404, f"model not found: {name}")
+    return Response(data, media_type=_models.content_type(name),
+                    headers={"Cache-Control": "no-store"})
+
+
+# ── chat (in-dashboard CAD agent) ──────────────────────────────────────────
+@app.get("/api/chat/status")
+async def chat_status():
+    return _chat.status()
+
+
+@app.post("/api/chat")
+async def chat_post(request: Request):
+    body = await request.json()
+    prompt = (body.get("prompt") or body.get("message") or "").strip()
+    if not prompt:
+        raise HTTPException(400, "empty prompt")
+    return await asyncio.to_thread(_chat.ask, prompt)
+
+
+@app.post("/api/chat/reset")
+async def chat_reset(request: Request):
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    return _chat.reset(rebuild=bool(body.get("rebuild")))
+
+
+# ── jobs (async slice / print) ─────────────────────────────────────────────
+@app.post("/api/slice")
+async def slice_start(request: Request):
+    body = await request.json()
+    name = body.get("name", "")
+    if not name:
+        raise HTTPException(400, "name required")
+    jid = _jobs.start_slice(name, profile=body.get("profile", ""),
+                            printer_model=body.get("printer_model", ""))
+    return {"job_id": jid}
+
+
+@app.post("/api/print")
+async def print_start(request: Request):
+    body = await request.json()
+    name = body.get("name", "")
+    if not name:
+        raise HTTPException(400, "name required")
+    jid = _jobs.start_print(name, use_ams=bool(body.get("use_ams", True)),
+                            plate_index=int(body.get("plate_index", 1)))
+    return {"job_id": jid}
+
+
+@app.get("/api/job/{jid}")
+async def job_status(jid: str):
+    j = _jobs.get(jid)
+    if not j:
+        raise HTTPException(404, "job not found")
+    return j
+
+
+@app.get("/api/jobs")
+async def jobs_recent():
+    return {"jobs": _jobs.recent()}
+
+
+# ── realtime voice (OpenAI ephemeral token) ────────────────────────────────
+@app.post("/api/realtime/token")
+async def realtime_token():
+    res = await asyncio.to_thread(_realtime.mint_ephemeral)
+    if not res.get("ok"):
+        return JSONResponse({"error": res.get("error", "mint failed")}, status_code=503)
+    return res
+
+
+# ── plate (editable build-plate: positions, transforms, colors) ────────────
+@app.get("/api/plate")
+async def plate_get():
+    return _plate.state()
+
+
+@app.get("/api/filaments")
+async def filaments_get():
+    return {"filaments": _config.get("filaments", []),
+            "nozzle_count": _config.get("nozzle_count", 1),
+            "printer_model": _config.get("printer_model", "")}
+
+
+@app.get("/api/filaments/live")
+async def filaments_live():
+    """Read ACTUAL loaded filaments from the printer's AMS + external spool.
+    Only returns slots that have real filament (non-empty color/type), so the
+    palette shows exactly what you can print with right now."""
+    ip, access, serial = _creds()
+    if not ip or not access:
+        return {"filaments": [], "error": "printer not configured"}
+    p = _printer.get_printer(ip, access, serial)
+    snap = p.snapshot()
+    out = []
+    def norm(c):
+        if not c: return None
+        c = str(c).lstrip("#")
+        if len(c) >= 6 and c[:6].upper() != "000000":  # drop empty/black-placeholder
+            return "#" + c[:6].upper()
+        # keep pure black only if type is set (real black filament)
+        return "#" + c[:6].upper() if len(c) >= 6 else None
+    # AMS units → nozzle 0 (AMS feeds the main extruder on X2D/H2D)
+    for unit in snap.get("ams", []):
+        for slot in unit.get("slots", []):
+            typ = slot.get("material"); col = slot.get("color")
+            if not typ:  # empty slot
+                continue
+            hexc = norm(col) or "#888888"
+            out.append({
+                "slot": f"AMS{unit.get('id')}-{slot.get('id')}",
+                "name": f"{typ} ({hexc})",
+                "type": typ, "color": hexc, "nozzle": 0,
+                "remaining_pct": slot.get("remaining_pct"),
+                "source": "ams",
+            })
+    # external spool (nozzle 1 on X2D) from live state vt_tray
+    ext = getattr(p, "_state", {}).get("vt_tray") or []
+    if isinstance(ext, list):
+        for vt in ext:
+            typ = vt.get("tray_type"); col = vt.get("tray_color")
+            if typ and str(col).upper() not in ("", "00000000"):
+                out.append({
+                    "slot": f"EXT-{vt.get('id')}", "name": f"{typ} (ext)",
+                    "type": typ, "color": "#" + str(col)[:6].upper(),
+                    "nozzle": 1, "source": "external",
+                })
+    return {"filaments": out, "count": len(out),
+            "nozzle_count": snap.get("nozzle_count", _config.get("nozzle_count", 2))}
+
+
+@app.post("/api/filaments/sync")
+async def filaments_sync():
+    """Pull live AMS colors and SAVE them as the working filament palette."""
+    live = await filaments_live()
+    fils = live.get("filaments", [])
+    if fils:
+        _config.update({"filaments": fils})
+    return {"ok": bool(fils), "filaments": fils, "count": len(fils)}
+
+
+@app.post("/api/filaments")
+async def filaments_set(request: Request):
+    b = await request.json()
+    patch = {}
+    if "filaments" in b: patch["filaments"] = b["filaments"]
+    if "nozzle_count" in b: patch["nozzle_count"] = int(b["nozzle_count"])
+    _config.update(patch)
+    return {"ok": True, "filaments": _config.get("filaments", [])}
+
+
+@app.post("/api/plate/add")
+async def plate_add(request: Request):
+    b = await request.json()
+    return _plate.add_item(b.get("source", ""), name=b.get("name", ""),
+                           position=b.get("position"), color=b.get("color", ""))
+
+
+@app.post("/api/plate/update")
+async def plate_update(request: Request):
+    b = await request.json()
+    return _plate.update_item(b.get("id", ""), position=b.get("position"),
+                              rotation=b.get("rotation"), scale=b.get("scale"),
+                              color=b.get("color"), name=b.get("name"))
+
+
+@app.post("/api/plate/recolor")
+async def plate_recolor(request: Request):
+    b = await request.json()
+    return _plate.recolor(b.get("id", "all"), b.get("color", "#cccccc"))
+
+
+@app.post("/api/plate/remove")
+async def plate_remove(request: Request):
+    b = await request.json()
+    return _plate.remove_item(b.get("id", ""))
+
+
+@app.post("/api/plate/clear")
+async def plate_clear():
+    return _plate.clear()
+
+
+@app.post("/api/plate/arrange")
+async def plate_arrange(request: Request):
+    b = {}
+    try: b = await request.json()
+    except Exception: pass
+    return _plate.auto_arrange(gap=float(b.get("gap", 10.0)))
+
+
+@app.post("/api/plate/export")
+async def plate_export():
+    return _plate.export_3mf()
+
+
+@app.post("/api/plate/print")
+async def plate_print(request: Request):
+    """Export the colored plate → slice → upload → START print (agent can call)."""
+    b = {}
+    try: b = await request.json()
+    except Exception: pass
+    exp = _plate.export_3mf()
+    if not exp.get("ok"):
+        return JSONResponse({"error": exp.get("error", "export failed")}, status_code=400)
+    # slice then print the exported colored 3mf
+    jid = _jobs.start_slice(exp["rel"])
+    return {"job_id": jid, "exported": exp["rel"], "then": "print",
+            "auto_print": bool(b.get("auto_print", True))}
+
+
+# ── telegram bridge ─────────────────────────────────────────────────────────
+@app.get("/api/telegram/status")
+async def telegram_status():
+    return _telegram.status()
+
+
+@app.post("/api/telegram/notify")
+async def telegram_notify(request: Request):
+    b = await request.json()
+    return _telegram.notify(b.get("text", ""))
+
+
+@app.post("/api/telegram/snapshot")
+async def telegram_snapshot(request: Request):
+    b = {}
+    try: b = await request.json()
+    except Exception: pass
+    return await asyncio.to_thread(_telegram.send_camera_snapshot, b.get("caption", "📷 chamber"))
+
+
+@app.get("/api/telegram/detect")
+async def telegram_detect():
+    return _telegram.detect_chat_id()
+
+
+@app.post("/api/telegram/poll")
+async def telegram_poll(request: Request):
+    b = {}
+    try: b = await request.json()
+    except Exception: pass
+    return _telegram.start_polling() if b.get("start", True) else _telegram.stop_polling()
+
+
+# ── thinker (background print watchdog) ─────────────────────────────────────
+@app.get("/api/thinker/status")
+async def thinker_status():
+    return _thinker.status()
+
+
+@app.post("/api/thinker/control")
+async def thinker_control(request: Request):
+    b = {}
+    try: b = await request.json()
+    except Exception: pass
+    return _thinker.start() if b.get("start", True) else _thinker.stop()
+
+
+# ── startup: auto-begin telegram polling + thinker loop ─────────────────────
+@app.on_event("startup")
+async def _autostart_bg():
+    # seed env from config store (telegram token/chat etc.) then start bg loops
+    try:
+        _config.load()
+    except Exception as e:
+        log.warning(f"config load at startup failed: {e}")
+    # telegram command poll loop (accepts /status /snapshot /ask ... from operator)
+    try:
+        r = _telegram.start_polling()
+        log.info(f"📱 telegram polling: {r}")
+    except Exception as e:
+        log.warning(f"telegram autostart failed: {e}")
+    # 🧠 slow-thinker background loop
+    try:
+        r = _thinker.start()
+        log.info(f"🧠 thinker autostart: {r}")
+    except Exception as e:
+        log.warning(f"thinker autostart failed: {e}")
 
 
 # ── static frontend ────────────────────────────────────────────────────────

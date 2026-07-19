@@ -44,15 +44,51 @@ PROFILES = {
 }
 
 
+# Env override: point at any slicer CLI (Bambu/Orca AppImage/binary).
+_SLICER_ENV = "STRANDS_CAD_SLICER"
+
+
 def _find_bambu_cli() -> str | None:
-    for cand in ("bambu-studio", "BambuStudio", "bambu_studio"):
+    """Locate a Bambu-Studio-compatible slicer CLI.
+
+    Order: explicit env override → Bambu Studio → OrcaSlicer (a Bambu Studio
+    fork sharing the same `--slice/--load-settings` CLI, and the only option
+    with ARM64/Linux builds) → PrusaSlicer (different CLI; handled separately).
+    Returns the CLI path or None.
+    """
+    import os as _os
+    override = _os.getenv(_SLICER_ENV)
+    if override and Path(override).exists():
+        return override
+    # Bambu Studio (x86 Linux / macOS) and OrcaSlicer (incl. ARM64)
+    for cand in ("bambu-studio", "BambuStudio", "bambu_studio",
+                 "orca-slicer", "OrcaSlicer", "orcaslicer", "OrcaSlicer_ubuntu"):
         p = shutil.which(cand)
         if p:
             return p
-    # macOS app bundle path
-    mac_path = Path("/Applications/BambuStudio.app/Contents/MacOS/BambuStudio")
-    if mac_path.exists():
-        return str(mac_path)
+    # common install locations (AppImage extracted / opt / user Applications)
+    for cand in (
+        "/Applications/BambuStudio.app/Contents/MacOS/BambuStudio",
+        "/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer",
+        str(Path.home() / ".local/bin/orca-slicer"),
+        str(Path.home() / "Applications/OrcaSlicer.AppImage"),
+        "/opt/OrcaSlicer/orca-slicer",
+    ):
+        if Path(cand).exists():
+            return cand
+    return None
+
+
+def _find_prusa_cli() -> str | None:
+    """PrusaSlicer CLI (apt package on ARM64 Ubuntu). Different arg surface."""
+    import os as _os
+    override = _os.getenv("STRANDS_CAD_PRUSA")
+    if override and Path(override).exists():
+        return override
+    for cand in ("prusa-slicer", "PrusaSlicer", "prusa-slicer-console"):
+        p = shutil.which(cand)
+        if p:
+            return p
     return None
 
 
@@ -95,7 +131,12 @@ def slice_bambu(
     """
     cli = _find_bambu_cli()
     if not cli:
-        return err("bambu-studio CLI not found. Install Bambu Studio and ensure it's on PATH.")
+        # No Bambu/Orca CLI (e.g. ARM64 where Bambu ships no build) → try Prusa.
+        prusa = _find_prusa_cli()
+        if prusa:
+            return _slice_with_prusa(prusa, input_3mf, output_gcode, profile, extra_args)
+        return err("no slicer CLI found. Install one: `python -m strands_cad.install_slicer` "
+                   "(OrcaSlicer/PrusaSlicer), or set $STRANDS_CAD_SLICER to a CLI path.")
     src = Path(input_3mf).resolve()
     out = Path(output_gcode).resolve()
     if not src.exists():
@@ -161,7 +202,13 @@ def slice_estimate(gcode_file: str) -> dict:
     src = Path(gcode_file).resolve()
     if not src.exists():
         return err(f"gcode not found: {src}")
-    text = src.read_text(errors="ignore")[:200_000]  # header only
+    # Bambu writes estimates in the header; PrusaSlicer writes them in a
+    # config block at the END of the file. Read both head and tail.
+    raw = src.read_bytes()
+    if len(raw) > 400_000:
+        text = (raw[:200_000] + raw[-200_000:]).decode("utf-8", errors="ignore")
+    else:
+        text = raw.decode("utf-8", errors="ignore")
     est_sec = None
     fil_g = None
     fil_mm = None
@@ -209,3 +256,52 @@ def slice_estimate(gcode_file: str) -> dict:
               estimated_seconds=est_sec, estimated_time_hms=hms,
               filament_g=fil_g, filament_mm=fil_mm,
               filament_g_estimated=fil_g_estimated)
+
+
+# ── PrusaSlicer fallback (ARM64-friendly; different CLI surface) ─────────────
+def _slice_with_prusa(cli: str, input_file: str, output_gcode: str,
+                      profile: str = "PLA_0_20",
+                      extra_args: list[str] | None = None) -> dict:
+    """Slice via PrusaSlicer console using our generic PROFILES as CLI overrides.
+
+    PrusaSlicer can ingest STL or 3MF directly and takes flat --key=value
+    overrides (unlike Bambu's preset JSONs), so we translate our PROFILES dict.
+    """
+    src = Path(input_file).resolve()
+    out = Path(output_gcode).resolve()
+    if not src.exists():
+        return err(f"input not found: {src}")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    if out.suffix.lower() == ".3mf":
+        out = out.with_suffix(".gcode")
+    prof = PROFILES.get(profile.upper(), PROFILES["PLA_0_20"])
+    fill = {"gyroid": "gyroid", "grid": "grid"}.get(prof.get("infill_pattern"), "gyroid")
+    args = [
+        cli, "--export-gcode", "-o", str(out),
+        f"--layer-height={prof['layer_height']}",
+        f"--fill-density={prof['infill_pct']}%",
+        f"--fill-pattern={fill}",
+        f"--perimeters={prof['walls']}",
+        f"--top-solid-layers={prof['top_bottom']}",
+        f"--bottom-solid-layers={prof['top_bottom']}",
+        f"--temperature={prof['nozzle_temp']}",
+        f"--bed-temperature={prof['bed_temp']}",
+        f"--first-layer-temperature={prof['nozzle_temp']}",
+        f"--first-layer-bed-temperature={prof['bed_temp']}",
+        "--nozzle-diameter=0.4",
+    ]
+    if prof.get("brim_mm"):
+        args.append(f"--brim-width={prof['brim_mm']}")
+    if prof.get("supports") == "auto":
+        args.append("--support-material")
+    if extra_args:
+        args.extend(extra_args)
+    args.append(str(src))
+    try:
+        r = subprocess.run(args, capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        return err("prusa-slicer slicing timed out")
+    log = (r.stdout + r.stderr)[-2000:]
+    if r.returncode != 0 or not out.exists():
+        return err(f"prusa slice failed (rc={r.returncode}): {log}")
+    return ok(f"sliced (PrusaSlicer) → {out}", path=str(out), log=log, slicer="prusa")

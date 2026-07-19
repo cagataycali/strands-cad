@@ -172,10 +172,25 @@ def bambu_upload(file_path: str, remote_name: str = "") -> dict:
         return err(f"file not found: {src}")
     name = remote_name or src.name
 
+    # Pre-flight: Bambu's FTPS server chroots into the SD card mount. If no card
+    # is inserted (sdcard=False in MQTT report), EVERY STOR fails with
+    # "553 Could not create file". Surface this as an actionable error.
+    with _LOCK:
+        last = _CONN.get("last_state") or {}
+    sd = last.get("sdcard")
+    if sd is False:
+        return err("553 would fail: printer reports NO SD/microSD card inserted "
+                   "(sdcard=False). Insert a FAT32 microSD card into the printer "
+                   "to enable file upload + LAN printing.",
+                   sdcard=False, hint="insert_sd_card")
+
     import ftplib
 
     class ImplicitFTPS(ftplib.FTP_TLS):
-        """FTP_TLS subclass for implicit TLS (Bambu uses port 990)."""
+        """FTP_TLS for implicit TLS (Bambu port 990) with data-channel TLS
+        session reuse — Bambu\'s server REQUIRES the data connection to reuse
+        the control connection\'s TLS session, otherwise STOR fails with
+        "553 Could not create file". Stock ftplib does not do this."""
         def connect(self, host="", port=0, timeout=-999, source_address=None):
             import socket as _socket
             if host:
@@ -190,6 +205,15 @@ def bambu_upload(file_path: str, remote_name: str = "") -> dict:
             self.file = self.sock.makefile("r", encoding=self.encoding)
             self.welcome = self.getresp()
             return self.welcome
+
+        def ntransfercmd(self, cmd, rest=None):
+            # Reuse the control connection\'s TLS session for the data channel.
+            conn, size = ftplib.FTP.ntransfercmd(self, cmd, rest)
+            if self._prot_p:
+                session = self.sock.session
+                conn = self.context.wrap_socket(
+                    conn, server_hostname=self.host, session=session)
+            return conn, size
 
     try:
         ctx = ssl.create_default_context()
@@ -234,6 +258,9 @@ def bambu_status() -> dict:
         layer=s.get("layer_num"),
         total_layers=s.get("total_layer_num"),
         remaining_min=s.get("mc_remaining_time"),
+        sdcard=s.get("sdcard"),
+        subtask_name=s.get("subtask_name"),
+        nozzle_count=(2 if s.get("2D") is not None else 1),
         temps={
             "nozzle": s.get("nozzle_temper"),
             "nozzle_target": s.get("nozzle_target_temper"),

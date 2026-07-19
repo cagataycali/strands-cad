@@ -34,6 +34,7 @@ classifiers = [
 # ---------------------------------------------------------------------------
 dependencies = [
     "strands-agents>=0.1.0",
+    "strands-agents-tools>=0.8.0",
     "strands-mcp-server>=0.1.4",
     # Core mesh
     "numpy>=1.24",
@@ -73,6 +74,7 @@ dashboard = [
     "cryptography>=42.0",
     "imageio-ffmpeg>=0.5",   # bundled static ffmpeg 7 (rtsps camera transcode)
     "python-dotenv>=1.0",
+    "openai>=1.40",       # 🎙️ OpenAI Realtime voice (ephemeral token minting)
 ]
 all = [
     "strands-cad[neural,sim,dashboard]",
@@ -80,6 +82,7 @@ all = [
 dev = ["pytest>=8.0", "pytest-cov", "build", "twine"]
 
 [project.scripts]
+strands-cad-install-slicer = "strands_cad.install_slicer:main"
 strands-cad-mcp = "strands_cad.mcp:main"
 strands-cad-dashboard = "strands_cad.dashboard.server:main"
 
