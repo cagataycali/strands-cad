@@ -146,6 +146,18 @@ def start_print(gcode_name: str, use_ams: bool = True, plate_index: int = 1) -> 
                 _set(jid, state="error", error="printer not configured")
                 return
             from strands_cad.tools.bambu import (bambu_connect, bambu_upload, bambu_send)
+            # Bambu firmware rejects a bare .gcode via project_file (state→FAILED,
+            # empty gcode_file). Wrap sliced gcode into a Bambu 3MF project bundle
+            # (Metadata/plate_N.gcode + md5 + slice_info) that the printer accepts.
+            if src.suffix.lower() == ".gcode":
+                from strands_cad.tools.mf3 import bambu_gcode_3mf
+                pm = cfg.get("printer_model") or "Bambu Lab X2D"
+                wrapped = bambu_gcode_3mf(str(src), plate_index=plate_index, printer_model=pm)
+                if wrapped.get("status") != "success":
+                    _set(jid, state="error", error=f"wrap failed: {wrapped}")
+                    return
+                src = Path(wrapped["path"])
+                _log(jid, f"wrapped gcode → {src.name} (Bambu project bundle)")
             _log(jid, f"connecting {ip} …")
             rc = bambu_connect(ip=ip, access_code=access, serial=serial or "")
             if rc.get("status") != "success":
