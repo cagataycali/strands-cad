@@ -263,6 +263,10 @@
     .dock .dockgrip:active{cursor:grabbing}
     .dock .dockgrip:active::before{width:60px;background:rgba(255,255,255,.7)}
     .dock.dockdragging{transition:none!important}
+    /* invite the pull when collapsed: brighter, wider, gently breathing pill */
+    .dock.collapsed .dockgrip::before{width:64px;height:6px;background:rgba(255,255,255,.6);
+          animation:gripbreathe 2.4s ease-in-out infinite}
+    @keyframes gripbreathe{0%,100%{opacity:.55;width:56px}50%{opacity:1;width:72px}}
     .dock .transcript{max-height:none;flex:1 1 auto;min-height:0;overflow-y:auto;margin:16px 0 8px}
     .dock.collapsed .transcript{display:none}
     .dock.collapsed #voiceStatus{display:none}

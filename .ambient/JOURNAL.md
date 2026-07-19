@@ -36,3 +36,9 @@ Harness: PASS ✅ (now incl. behavioral drag). pytest 37 green.
 ## Iter 5 (16:25) — bigger pip control buttons on mobile (P1 touch targets)
 Mobile: .pipbtns button 22px→32px, font 11→14, gap 4→6, piphead padding bumped.
 Added harness invariant pip_btn_touch (>=30px). Harness PASS ✅, pytest 37 green.
+
+## Iter 6 (16:27) — polish: grip discoverability + hardening invariants
+Added harness invariants: no_h_overflow (all vp) + chat_input_tall (>=40px) — both PASS,
+confirming layout has no hidden horizontal scroll and the chat field is always tappable.
+Visual: collapsed sheet's grip pill now "breathes" (gentle width/opacity pulse) to invite
+the pull-up gesture. Harness PASS ✅ (11 invariants now). pytest 37 green.

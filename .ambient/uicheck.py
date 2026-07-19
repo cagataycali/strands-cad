@@ -45,6 +45,9 @@ def run():
                     ov = not (tp["right"]<=pp["x"] or pp["right"]<=tp["x"] or tp["bottom"]<=pp["y"] or pp["bottom"]<=tp["y"])
                     chk("pips_no_overlap", not ov, f"telem={tp} plate={pp}")
                 # INVARIANT 4: dock present + has a grip/handle
+                # INVARIANT 8: no horizontal overflow (content wider than viewport = broken layout)
+                sw = pg.evaluate("()=>({sw:document.documentElement.scrollWidth, iw:window.innerWidth})")
+                # (define chk before use below is fine; chk defined above)
                 grip = pg.query_selector("#dockGrip")
                 chk("dock_grip_present", grip is not None, "no #dockGrip")
                 # INVARIANT 5 (mobile): dock must be draggable via a gesture, expose window.__dockDraggable flag if implemented
@@ -78,6 +81,9 @@ def run():
                         chk("dock_drag_resizes", False, f"drag sim error {ex}")
                 # INVARIANT 6: no console errors
                 # (collected via listener below)
+                chk("no_h_overflow", sw["sw"] <= sw["iw"]+2, f"scrollWidth={sw['sw']} > innerWidth={sw['iw']}")
+                ci = box(pg, "#chatInput")
+                if ci: chk("chat_input_tall", ci["h"]>=40, f"chatInput h={ci['h']:.0f} (want >=40)")
                 r["console_errors"] = pg.__dict__.get("_cerr", [])
             except Exception as e:
                 r["error"] = str(e); fails.append(f"[{name}] EXCEPTION {e}")
