@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>🔧 strands-cad · printer</title>
+<style>
+  :root{
+    --bg:#0a0a0f; --panel:#13131c; --panel2:#0b0b12; --line:rgba(255,255,255,.10);
+    --txt:#e8e8f0; --dim:#8a8aa0; --accent:#76b900; --accent2:#00d9ff;
+    --hot:#ff6b4a; --warn:#ffce54; --ok:#9be319;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
+       background:radial-gradient(1200px 800px at 70% -10%,#161624,#0a0a0f);
+       color:var(--txt);min-height:100vh}
+  a{color:var(--accent)}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px}
+  header{display:flex;align-items:center;justify-content:space-between;
+         padding:14px 4px 22px}
+  .brand{display:flex;align-items:center;gap:12px;font-weight:700;font-size:20px}
+  .brand .dot{width:10px;height:10px;border-radius:50%;background:var(--dim);
+              box-shadow:0 0 10px currentColor}
+  .brand .dot.on{background:var(--ok);color:var(--ok)}
+  .pill{font-size:11px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);
+        color:var(--dim);background:rgba(255,255,255,.03)}
+  .grid{display:grid;grid-template-columns:1.5fr 1fr;gap:18px}
+  @media(max-width:860px){.grid{grid-template-columns:1fr}}
+  .card{background:linear-gradient(160deg,var(--panel),var(--panel2));
+        border:1px solid var(--line);border-radius:20px;padding:18px;
+        box-shadow:0 20px 60px rgba(0,0,0,.45)}
+  .card h2{margin:0 0 14px;font-size:14px;font-weight:600;color:var(--dim);
+           text-transform:uppercase;letter-spacing:.08em}
+  /* camera */
+  .cam{position:relative;border-radius:16px;overflow:hidden;background:#000;
+       aspect-ratio:16/9;display:flex;align-items:center;justify-content:center}
+  .cam img{width:100%;height:100%;object-fit:cover;display:block}
+  .cam .badge{position:absolute;top:10px;left:10px;font-size:11px;padding:4px 9px;
+              border-radius:8px;background:rgba(0,0,0,.55);color:#fff;
+              display:flex;gap:6px;align-items:center}
+  .cam .badge .rec{width:8px;height:8px;border-radius:50%;background:var(--hot);
+                   animation:pulse 1.4s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  /* telemetry */
+  .stat{display:flex;justify-content:space-between;align-items:baseline;
+        padding:10px 0;border-bottom:1px solid var(--line)}
+  .stat:last-child{border-bottom:0}
+  .stat .k{color:var(--dim);font-size:13px}
+  .stat .v{font-variant-numeric:tabular-nums;font-weight:600;font-size:15px}
+  .temps{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:6px}
+  .temp{background:rgba(255,255,255,.04);border:1px solid var(--line);
+        border-radius:12px;padding:10px;text-align:center}
+  .temp .lbl{font-size:11px;color:var(--dim)}
+  .temp .val{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+  .temp .tgt{font-size:11px;color:var(--dim)}
+  .bar{height:8px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden;margin:6px 0 2px}
+  .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));
+           width:0%;transition:width .6s}
+  .btns{display:flex;gap:10px;margin-top:16px}
+  button{flex:1;padding:12px;border-radius:12px;border:1px solid var(--line);
+         background:rgba(255,255,255,.05);color:var(--txt);font-size:14px;
+         font-weight:600;cursor:pointer;transition:.15s}
+  button:hover{background:rgba(255,255,255,.1)}
+  button.primary{background:var(--accent);color:#07120a;border-color:var(--accent)}
+  button.danger{background:rgba(255,107,74,.14);color:var(--hot);border-color:rgba(255,107,74,.4)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .ams{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .slot{width:38px;height:52px;border-radius:8px;border:2px solid var(--line);
+        position:relative;overflow:hidden}
+  .slot .fill{position:absolute;bottom:0;left:0;right:0}
+  .slot .pc{position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:9px;
+            text-shadow:0 1px 2px #000}
+  /* auth overlay */
+  .overlay{position:fixed;inset:0;background:rgba(5,5,10,.86);backdrop-filter:blur(8px);
+           display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .authcard{width:min(420px,94vw);text-align:center}
+  .authcard .lock{font-size:44px;margin-bottom:6px}
+  .authcard p{color:var(--dim);font-size:14px;line-height:1.6}
+  .authcard button{width:100%;margin-top:8px}
+  .hide{display:none!important}
+  .warn{background:rgba(255,206,84,.1);border:1px dashed rgba(255,206,84,.4);
+        color:var(--warn);border-radius:12px;padding:12px;font-size:13px;margin:12px 0}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+         background:#1a1a26;border:1px solid var(--line);padding:12px 20px;
+         border-radius:12px;font-size:14px;opacity:0;transition:.3s;z-index:60}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<!-- AUTH OVERLAY -->
+<div id="overlay" class="overlay">
+  <div class="card authcard">
+    <div class="lock">🔐</div>
+    <h2 id="authTitle" style="color:var(--txt);text-transform:none;letter-spacing:0;font-size:20px">strands-cad printer</h2>
+    <p id="authMsg">Checking access…</p>
+    <div id="warnBox" class="warn hide"></div>
+    <button id="btnEnroll" class="primary hide" onclick="enroll()">🔑 Create passkey (seal this printer)</button>
+    <button id="btnLogin" class="primary hide" onclick="login()">🔓 Unlock with passkey</button>
+    <input id="bootstrap" class="hide" placeholder="bootstrap token" style="width:100%;padding:10px;margin-top:8px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--txt)">
+  </div>
+</div>
+
+<div class="wrap">
+  <header>
+    <div class="brand"><span id="statusDot" class="dot"></span> 🔧 strands-cad <span class="pill" id="serialPill">printer</span></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span class="pill" id="statePill">—</span>
+      <button style="flex:0;padding:6px 14px;font-size:12px" onclick="logout()">logout</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- CAMERA -->
+    <div class="card">
+      <h2>📷 Chamber Camera</h2>
+      <div class="cam">
+        <div class="badge"><span class="rec"></span> LIVE · <span id="camRes">—</span></div>
+        <img id="cam" alt="camera" src="">
+      </div>
+    </div>
+
+    <!-- TELEMETRY + CONTROL -->
+    <div class="card">
+      <h2>🖨️ Status</h2>
+      <div class="stat"><span class="k">Job</span><span class="v" id="job">—</span></div>
+      <div class="stat"><span class="k">Progress</span><span class="v" id="pct">—</span></div>
+      <div class="bar"><i id="barFill"></i></div>
+      <div class="stat"><span class="k">Layer</span><span class="v" id="layer">—</span></div>
+      <div class="stat"><span class="k">Time left</span><span class="v" id="eta">—</span></div>
+
+      <div class="temps">
+        <div class="temp"><div class="lbl">Nozzle</div><div class="val" id="tN">—</div><div class="tgt" id="tNt">/ —</div></div>
+        <div class="temp"><div class="lbl">Bed</div><div class="val" id="tB">—</div><div class="tgt" id="tBt">/ —</div></div>
+        <div class="temp"><div class="lbl">Chamber</div><div class="val" id="tC">—</div><div class="tgt">°C</div></div>
+      </div>
+
+      <h2 style="margin-top:18px">🎛️ AMS</h2>
+      <div class="ams" id="ams"><span style="color:var(--dim);font-size:13px">no AMS</span></div>
+
+      <div class="btns">
+        <button id="bPause" onclick="ctl('pause')">⏸ Pause</button>
+        <button id="bResume" onclick="ctl('resume')">▶ Resume</button>
+        <button id="bStop" class="danger" onclick="ctl('stop')">⏹ Stop</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ── tiny helpers ──────────────────────────────────────────────────────────
+const $ = s => document.querySelector(s);
+let TOKEN = localStorage.getItem('cad_token') || '';
+function authHeaders(){ return TOKEN ? {'Authorization':'Bearer '+TOKEN} : {}; }
+function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2600); }
+
+// base64url ↔ ArrayBuffer for WebAuthn
+const b64uToBuf = s => { s=s.replace(/-/g,'+').replace(/_/g,'/'); const p='='.repeat((4-s.length%4)%4);
+  const b=atob(s+p); const u=new Uint8Array(b.length); for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i); return u.buffer; };
+const bufToB64u = b => { const u=new Uint8Array(b); let s=''; for(const x of u)s+=String.fromCharCode(x);
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); };
+
+// ── auth flow ───────────────────────────────────────────────────────────
+async function checkAuth(){
+  const r = await fetch('/auth/status',{headers:authHeaders()});
+  const s = await r.json();
+  if(s.warning){ $('#warnBox').textContent='⚠️ '+s.warning; $('#warnBox').classList.remove('hide'); }
+  if(!s.enabled){ unlock(); return; }
+  // do we have a working token?
+  if(TOKEN){
+    const t = await fetch('/api/health',{headers:authHeaders()});
+    if(t.ok){ unlock(); return; }
+    TOKEN=''; localStorage.removeItem('cad_token');
+  }
+  if(s.setup_required){
+    $('#authMsg').textContent='No passkey enrolled yet. Create one to seal this printer — only your device (Touch ID / Face ID / security key) will be able to unlock it.';
+    $('#btnEnroll').classList.remove('hide');
+    if(s.bootstrap_required) $('#bootstrap').classList.remove('hide');
+  } else {
+    $('#authMsg').textContent='This printer is sealed. Unlock with your passkey.';
+    $('#btnLogin').classList.remove('hide');
+  }
+}
+async function enroll(){
+  try{
+    const body={label:'admin passkey', bootstrap:$('#bootstrap').value||''};
+    const r=await fetch('/auth/register/begin',{method:'POST',headers:{'Content-Type':'application/json',...authHeaders()},body:JSON.stringify(body)});
+    if(!r.ok){ toast('enroll failed: '+(await r.text())); return; }
+    const {challenge_id, options}=await r.json();
+    options.challenge=b64uToBuf(options.challenge);
+    options.user.id=b64uToBuf(options.user.id);
+    (options.excludeCredentials||[]).forEach(c=>c.id=b64uToBuf(c.id));
+    const cred=await navigator.credentials.create({publicKey:options});
+    const payload={challenge_id, credential:{
+      id:cred.id, rawId:bufToB64u(cred.rawId), type:cred.type,
+      response:{ clientDataJSON:bufToB64u(cred.response.clientDataJSON),
+                 attestationObject:bufToB64u(cred.response.attestationObject)}}};
+    const f=await fetch('/auth/register/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const res=await f.json();
+    if(res.ok){ TOKEN=res.token; localStorage.setItem('cad_token',TOKEN); toast('passkey created 🎉'); unlock(); }
+    else toast('enroll error');
+  }catch(e){ toast('enroll error: '+e.message); }
+}
+async function login(){
+  try{
+    const r=await fetch('/auth/login/begin',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    const {challenge_id, options}=await r.json();
+    options.challenge=b64uToBuf(options.challenge);
+    (options.allowCredentials||[]).forEach(c=>c.id=b64uToBuf(c.id));
+    const cred=await navigator.credentials.get({publicKey:options});
+    const payload={challenge_id, credential:{
+      id:cred.id, rawId:bufToB64u(cred.rawId), type:cred.type,
+      response:{ clientDataJSON:bufToB64u(cred.response.clientDataJSON),
+                 authenticatorData:bufToB64u(cred.response.authenticatorData),
+                 signature:bufToB64u(cred.response.signature),
+                 userHandle:cred.response.userHandle?bufToB64u(cred.response.userHandle):null}}};
+    const f=await fetch('/auth/login/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const res=await f.json();
+    if(res.ok){ TOKEN=res.token; localStorage.setItem('cad_token',TOKEN); toast('unlocked 🔓'); unlock(); }
+    else toast('login failed');
+  }catch(e){ toast('login error: '+e.message); }
+}
+function logout(){ TOKEN=''; localStorage.removeItem('cad_token'); location.reload(); }
+
+function unlock(){
+  $('#overlay').classList.add('hide');
+  // camera stream needs the token in the URL (img can't send headers)
+  $('#cam').src='/api/camera/stream'+(TOKEN?('?token='+encodeURIComponent(TOKEN)):'');
+  startTelemetry();
+}
+
+// ── telemetry ─────────────────────────────────────────────────────────────
+function fmtEta(m){ if(m==null)return'—'; if(m<60)return m+'m';
+  return Math.floor(m/60)+'h '+(m%60)+'m'; }
+async function poll(){
+  try{
+    const r=await fetch('/api/telemetry',{headers:authHeaders()});
+    if(r.status===401){ logout(); return; }
+    const s=await r.json();
+    $('#statusDot').classList.toggle('on', !!s.connected);
+    $('#serialPill').textContent = s.serial || 'printer';
+    $('#statePill').textContent = s.gcode_state || '—';
+    $('#job').textContent = s.subtask_name || '—';
+    $('#pct').textContent = (s.progress!=null? s.progress+'%':'—');
+    $('#barFill').style.width = (s.progress||0)+'%';
+    $('#layer').textContent = (s.layer!=null? s.layer+' / '+(s.total_layers||'?'):'—');
+    $('#eta').textContent = fmtEta(s.remaining_min);
+    const t=s.temps||{};
+    $('#tN').textContent = t.nozzle!=null? Math.round(t.nozzle):'—';
+    $('#tNt').textContent = '/ '+(t.nozzle_target!=null?Math.round(t.nozzle_target):'—');
+    $('#tB').textContent = t.bed!=null? Math.round(t.bed):'—';
+    $('#tBt').textContent = '/ '+(t.bed_target!=null?Math.round(t.bed_target):'—');
+    $('#tC').textContent = t.chamber!=null? Math.round(t.chamber):'—';
+    // AMS
+    const ams=s.ams||[]; const box=$('#ams');
+    if(ams.length){ box.innerHTML='';
+      ams.forEach(u=>u.slots.forEach(sl=>{
+        const col = sl.color? ('#'+String(sl.color).slice(0,6)) : '#333';
+        const pc = sl.remaining_pct!=null? sl.remaining_pct : 0;
+        box.insertAdjacentHTML('beforeend',
+          `<div class="slot" title="${sl.material||''} ${pc}%">
+             <div class="fill" style="height:${pc}%;background:${col}"></div>
+             <div class="pc">${pc}%</div></div>`);
+      }));
+    }
+    $('#camRes').textContent = (s.gcode_state==='RUNNING'?'printing':'idle');
+  }catch(e){}
+}
+let _tmr=null;
+function startTelemetry(){ if(_tmr)return; poll(); _tmr=setInterval(poll,2000); }
+
+async function ctl(action){
+  if(action==='stop' && !confirm('Stop the print?')) return;
+  const r=await fetch('/api/control',{method:'POST',
+    headers:{'Content-Type':'application/json',...authHeaders()},
+    body:JSON.stringify({action})});
+  toast(r.ok? (action+' sent'):'control failed');
+}
+
+checkAuth();
+</script>
+</body>
+</html>

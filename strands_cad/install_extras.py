@@ -1,28 +1,52 @@
 """Install optional git-only deps for strands-cad SDF + neural tools.
 
+Why a helper?  PyPI forbids direct-git dependencies, so `sdf` (fogleman) and
+`shap-e` (openai) can't live in pyproject. Worse, shap-e's setup.py pins an
+ancient `numba`/`llvmlite` (0.53/0.36) that FAILS to build on Python ≥3.10 —
+so we must install it with `--no-deps` and satisfy its real runtime deps
+ourselves (they're already covered by the [neural] extra + a couple extras).
+
 Usage:
-    python -m strands_cad.install_extras           # install both
-    python -m strands_cad.install_extras sdf       # SDF only
-    python -m strands_cad.install_extras neural    # neural only
+    python -m strands_cad.install_extras            # install both (sdf+neural)
+    python -m strands_cad.install_extras sdf        # SDF only
+    python -m strands_cad.install_extras neural     # neural (shap-e) only
 """
 import subprocess
 import sys
 
-EXTRAS = {
-    "sdf":    "git+https://github.com/fogleman/sdf.git",
-    "neural": "git+https://github.com/openai/shap-e.git",
-}
+
+def _pip(*args) -> int:
+    return subprocess.call([sys.executable, "-m", "pip", "install", *args])
+
+
+def install_sdf() -> int:
+    print("→ installing sdf (fogleman) …")
+    return _pip("git+https://github.com/fogleman/sdf.git")
+
+
+def install_neural() -> int:
+    # shap-e --no-deps to dodge its ancient numba pin; then its real runtime deps.
+    print("→ installing shap-e (openai) with --no-deps (avoids ancient numba pin) …")
+    rc = _pip("--no-deps", "git+https://github.com/openai/shap-e.git")
+    if rc != 0:
+        return rc
+    print("→ installing shap-e runtime deps …")
+    rc = _pip("torch>=2.0", "torchvision>=0.15", "Pillow>=10.0",
+              "tqdm>=4.60", "pyyaml", "ipywidgets>=8.0")
+    if rc != 0:
+        return rc
+    print("→ installing CLIP (openai) …")
+    return _pip("git+https://github.com/openai/CLIP.git")
 
 
 def main():
-    which = sys.argv[1:] or list(EXTRAS.keys())
+    which = sys.argv[1:] or ["sdf", "neural"]
+    handlers = {"sdf": install_sdf, "neural": install_neural}
     for name in which:
-        if name not in EXTRAS:
-            print(f"❌ unknown extra '{name}'. Options: {list(EXTRAS.keys())}")
+        if name not in handlers:
+            print(f"❌ unknown extra '{name}'. Options: {list(handlers)}")
             sys.exit(1)
-        url = EXTRAS[name]
-        print(f"→ installing {name} from {url}")
-        rc = subprocess.call([sys.executable, "-m", "pip", "install", url])
+        rc = handlers[name]()
         if rc != 0:
             print(f"❌ failed to install {name}")
             sys.exit(rc)

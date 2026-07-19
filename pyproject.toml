@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "strands-cad"
-version = "0.3.6"
-description = "🔧 Atomic CAD, mesh, SDF, cadquery, neural & print tools for Strands agents — prompt-to-print pipeline"
+version = "0.4.0"
+description = "🔧 Atomic CAD, mesh, SDF, cadquery, neural & print tools + WebAuthn-gated printer dashboard for Strands agents — prompt-to-print pipeline"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Cagatay Cali" }]
-keywords = ["3d", "cad", "openscad", "cadquery", "sdf", "shap-e", "3d-printing", "bambu", "mesh", "stl", "3mf", "strands", "agents"]
+keywords = ["3d", "cad", "openscad", "cadquery", "sdf", "shap-e", "3d-printing", "bambu", "mesh", "stl", "3mf", "strands", "agents", "dashboard", "webauthn"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -24,6 +24,14 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 
+# ---------------------------------------------------------------------------
+# CORE dependencies — everything here installs in ONE shot on py3.10–3.13 with
+# plain `pip install strands-cad`. No git URLs, no build-from-source landmines.
+#
+#   • numba/llvmlite are pinned to modern wheels so cadquery's transitive
+#     numba dep never resolves to the ancient 0.53.1 (which hard-fails to
+#     build on Python >=3.10 — the classic strands-cad install trap).
+# ---------------------------------------------------------------------------
 dependencies = [
     "strands-agents>=0.1.0",
     "strands-mcp-server>=0.1.4",
@@ -34,34 +42,46 @@ dependencies = [
     "scikit-image>=0.22",
     "rtree",
     "fast-simplification>=0.1",
-    # Real CAD (B-rep / NURBS)
+    "meshio>=5.0",
+    # Real CAD (B-rep / NURBS) — cadquery drags in numba; pin it forward so
+    # the resolver never falls back to numba 0.53.1 / llvmlite 0.36 (py<3.10).
     "cadquery>=2.5",
-    # Neural helpers (Shap-E installed separately from git — see README)
-    "torch>=2.0",
-    "torchvision>=0.15",
-    "ipywidgets>=8.0",
-    "Pillow>=10.0",
-    # Sim
-    "mujoco>=3.0",
+    "numba>=0.59",
+    "llvmlite>=0.42",
     # Bambu printer control
     "paho-mqtt>=2.0",
     "requests>=2.31",
-    # Mesh IO
-    "meshio>=5.0",
 ]
 
-# NOTE: `sdf` (fogleman) and `shap-e` (openai) are only on GitHub —
+# NOTE: `sdf` (fogleman) and `shap-e` (openai) are GitHub-only —
 # PyPI disallows direct git URLs, so users install them separately:
 #   pip install strands-cad
-#   pip install git+https://github.com/fogleman/sdf.git       # for SDF tools
-#   pip install git+https://github.com/openai/shap-e.git      # for neural tools
-# Or use the post-install helper: `python -m strands_cad.install_extras`
+#   python -m strands_cad.install_extras          # sdf + neural, resolver-safe
+# (install_extras installs shap-e with --no-deps to avoid its ancient numba pin.)
 
 [project.optional-dependencies]
+# Heavy / GPU-ish groups kept OUT of core so `pip install strands-cad` stays
+# fast and reliable. Opt in only to what you need.
+neural = ["torch>=2.0", "torchvision>=0.15", "Pillow>=10.0", "tqdm>=4.60", "ipywidgets>=8.0"]
+sim    = ["mujoco>=3.0"]
+# 🖥️ WebAuthn-gated live printer dashboard (FastAPI + passkeys + RTSPS camera)
+dashboard = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "webauthn>=2.0",
+    "PyJWT>=2.8",
+    "cryptography>=42.0",
+    "imageio-ffmpeg>=0.5",   # bundled static ffmpeg 7 (rtsps camera transcode)
+    "python-dotenv>=1.0",
+]
+all = [
+    "strands-cad[neural,sim,dashboard]",
+]
 dev = ["pytest>=8.0", "pytest-cov", "build", "twine"]
 
 [project.scripts]
 strands-cad-mcp = "strands_cad.mcp:main"
+strands-cad-dashboard = "strands_cad.dashboard.server:main"
 
 [project.urls]
 Homepage   = "https://github.com/cagataycali/strands-cad"
@@ -70,3 +90,6 @@ Issues     = "https://github.com/cagataycali/strands-cad/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["strands_cad"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"strands_cad/dashboard/frontend/index.html" = "strands_cad/dashboard/frontend/index.html"

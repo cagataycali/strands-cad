@@ -15,3 +15,9 @@ venv/
 !examples/*.stl
 !tests/fixtures/*.stl
 examples/props/
+
+# dashboard runtime artifacts
+.strands_cad_auth.json
+.strands_cad_tls/
+.coverage
+system_prompt.prompt

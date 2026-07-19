@@ -5,9 +5,28 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![test](https://github.com/cagataycali/strands-cad/actions/workflows/test.yml/badge.svg)](https://github.com/cagataycali/strands-cad/actions/workflows/test.yml)
 
-**Atomic CAD, mesh, SDF, cadquery, neural & print tools for [Strands](https://github.com/strands-agents) agents.**
+**The prompt-to-print pipeline for AI agents.** Atomic CAD, mesh, SDF, cadquery,
+neural & print tools for [Strands](https://github.com/strands-agents) agents —
+plus a **WebAuthn-gated live printer dashboard** with real-time chamber camera.
 
-Four independent paths to a printable 3D asset:
+> Talk to an agent → it designs a part → validates its physics → slices it →
+> sends it to your Bambu Lab printer → and you watch it print from a
+> passkey-protected web page on your phone. All local. All open.
+
+### Three ways to look at it
+
+- **🤖 For agent builders** — 59 atomic, composable tools over MCP. Drop them
+  into Claude Code / Cursor / Kiro / any Strands agent and your model can model,
+  simulate, slice, and print in one conversation.
+- **🖨️ For makers** — a headless print farm brain: `pip install`, point it at
+  your printer, and drive prints + watch the camera from any browser, sealed
+  behind device passkeys (Touch ID / Face ID / YubiKey).
+- **🦾 For robotics researchers** — design manipulation props (T-blocks, peg
+  boards, grippers), compute print-accurate mass/inertia, spawn a MuJoCo world,
+  and print the physical twin — the exact loop behind
+  [strands-labs/robots](https://github.com/strands-labs/robots).
+
+### Four independent paths to a printable 3D asset
 
 | Path | Tool | Best For |
 |---|---|---|
@@ -16,33 +35,105 @@ Four independent paths to a printable 3D asset:
 | **SDF / implicit math** | `sdf_render_stl` | Organic, twisted, TPMS, blended surfaces |
 | **Neural (text/image → 3D)** | `neural_text_to_stl` | AI generation from prompt or reference photo |
 
-All roads lead to STL → 3MF → Bambu Lab.
+All roads lead to STL → 3MF → Bambu Lab → **live on your dashboard**.
 
 ## Install
+
+**Zero-shot — one command, works on Python 3.10–3.13:**
 
 ```bash
 pip install strands-cad
 ```
 
-Core includes: `trimesh, cadquery, torch, scipy, scikit-image, mujoco, paho-mqtt, fast-simplification, meshio, numpy`.
+That's it. Core gives you SCAD, CadQuery (B-rep), all mesh/STL/3MF ops, slicing,
+Bambu printer control, and the MCP server — no build-from-source landmines.
 
-### Optional git-only extras
+> **Why "zero-shot" matters here:** cadquery pulls in `numba`, and naive
+> resolvers used to drag in the ancient `numba 0.53 / llvmlite 0.36` combo that
+> *fails to compile* on modern Python. strands-cad pins `numba>=0.59` /
+> `llvmlite>=0.42` so `pip install` just… works. First try. Every time.
 
-PyPI disallows direct git URLs, so two libraries install separately:
+### Optional extras (opt-in, kept out of core so the base install stays lean)
 
 ```bash
-python -m strands_cad.install_extras            # both
-# OR selective:
-python -m strands_cad.install_extras sdf        # fogleman/sdf → sdf_render_stl
-python -m strands_cad.install_extras neural     # openai/shap-e → neural_text_to_stl
+pip install "strands-cad[dashboard]"   # 🖥️ WebAuthn dashboard + live camera
+pip install "strands-cad[sim]"         # 🦿 MuJoCo physics simulation
+pip install "strands-cad[neural]"      # 🧠 torch (for shap-e text→3D)
+pip install "strands-cad[all]"         # everything above
 ```
 
-### External system tools
+### Git-only extras (SDF + neural weights — PyPI forbids git URLs)
+
+```bash
+python -m strands_cad.install_extras            # both (resolver-safe)
+python -m strands_cad.install_extras sdf        # fogleman/sdf → sdf_* tools
+python -m strands_cad.install_extras neural     # openai/shap-e → neural_* tools
+```
+
+The helper installs shap-e with `--no-deps` (its setup.py pins an ancient numba)
+and then satisfies its real runtime deps — so it installs cleanly on 3.10–3.13.
+
+### External system tools (only for those specific tools)
 
 - `openscad` for `scad_*` tools — `brew install openscad`
 - `bambu-studio` for `slice_bambu` — download from bambulab.com
+- ffmpeg for the dashboard camera — **bundled** via `imageio-ffmpeg` (no system install)
 
-## The 56 Atomic Tools
+## 🖥️ Live Printer Dashboard (WebAuthn + chamber camera)
+
+A single command turns your host into a passkey-sealed cockpit for your Bambu
+printer: **live 1080p chamber camera**, temps / progress / AMS telemetry, and
+pause / resume / stop — all behind WebAuthn so a stranger on your LAN can't
+start fires or move motors.
+
+```bash
+pip install "strands-cad[dashboard]"
+
+BAMBU_IP=192.168.1.164 BAMBU_ACCESS_CODE=xxxxxxxx \
+  strands-cad-dashboard --tls          # → https://localhost:8099
+```
+
+Or let an **agent** spin it up on demand (also exposed over MCP):
+
+```python
+dashboard_start(ip="192.168.1.164", access_code="xxxxxxxx", tls=True)
+# → open the URL, tap "Create passkey", and you're watching the print.
+```
+
+**How the security model works**
+
+1. **First visit** → the dashboard is *unsealed*; you enroll an admin passkey
+   (Touch ID / Face ID / Windows Hello / a hardware key). The private key never
+   leaves your device secure enclave — the server only stores the public key.
+2. **From then on** it's *sealed*: every `/api/*` call and the camera stream
+   require a valid short-lived JWT session, minted only by proving your passkey.
+3. **No passwords, nothing to phish, no cloud** — 100% on your LAN.
+
+**Why TLS?** WebAuthn only runs in a "secure context" (HTTPS or `localhost`).
+`--tls` mints a self-signed cert (SANs for every LAN IP + hostname) so passkeys
+work when you open the dashboard from your phone at `https://192.168.1.x:8099`.
+Have `mkcert` installed? It's auto-detected for a zero-warning trusted cert.
+
+**The hard part we solved for you — the Bambu camera.** Bambu P1/A1 printers
+serve the chamber cam *only* as RTSPS (RTSP-over-TLS) H.264 on port 322, behind
+LIVE555 with digest auth — and `ffmpeg` plain `-i rtsps://…` **hangs** on it.
+strands-cad does the RTSP/TLS handshake in pure Python, reassembles the H.264
+NAL stream from interleaved RTP, and pipes it to a bundled static ffmpeg for
+MJPEG — so `/api/camera/stream` "just works" with a shared frame across all
+viewers, auto-reconnect, and a single held live-view session. (Verified live:
+1920×1080 @ 15 fps.)
+
+| Dashboard env var | Default | Meaning |
+|---|---|---|
+| `BAMBU_IP` | — | printer LAN IP |
+| `BAMBU_ACCESS_CODE` | — | LAN access code (printer Settings → Network) |
+| `STRANDS_CAD_TLS` | `false` | serve HTTPS (needed for LAN passkeys) |
+| `STRANDS_CAD_DASH_PORT` | `8099` | dashboard port |
+| `STRANDS_CAD_AUTH_ENABLED` | `true` | master WebAuthn switch |
+| `STRANDS_CAD_AUTH_RP_ID` | derived | pin the WebAuthn relying-party id (a hostname) |
+| `STRANDS_CAD_AUTH_BOOTSTRAP` | — | one-time secret to gate the *first* enrollment |
+
+## The 59 Atomic Tools
 
 | Layer | Tools |
 |---|---|
@@ -59,10 +150,11 @@ python -m strands_cad.install_extras neural     # openai/shap-e → neural_text_
 | **Sim** | `sim_build_mjcf`, `sim_run_headless`, `sim_view_live`, `sim_inertia_from_stl` |
 | **Preview** | `preview_serve`, `preview_stop` |
 | **Meta** | `bom_parse`, `bom_total`, `journal_append` |
+| **Dashboard** (WebAuthn + camera) | `dashboard_start`, `dashboard_stop`, `dashboard_status` |
 
 ## MCP Server (Claude Code, Claude Desktop, Cursor, Kiro)
 
-All 56 tools are exposable over the [Model Context Protocol](https://modelcontextprotocol.io/) via the `strands-cad-mcp` entrypoint (built on [strands-mcp-server](https://github.com/cagataycali/strands-mcp-server)).
+All 59 tools are exposable over the [Model Context Protocol](https://modelcontextprotocol.io/) via the `strands-cad-mcp` entrypoint (built on [strands-mcp-server](https://github.com/cagataycali/strands-mcp-server)).
 
 ### Claude Code
 
@@ -100,7 +192,7 @@ strands-cad-mcp --http --port 8000 --stateless  # multi-node scalable
 | `--http --port N` | StreamableHTTP transport instead of stdio |
 | `--stateless` | Fresh transport per request (horizontal scaling) |
 | `--tools a,b,c` | Expose only named tools |
-| `--skip neural,sim,...` | Skip tool groups (`scad,stl,mf3,slice,bambu,sim,preview,meta,sdf,cadquery,neural`) |
+| `--skip neural,sim,...` | Skip tool groups (`scad,stl,mf3,slice,bambu,sim,preview,meta,sdf,cadquery,neural,dashboard`) |
 | `--agent-invocation` | Also expose `invoke_agent` for full conversations |
 | `--debug` | Verbose logging (stderr) |
 

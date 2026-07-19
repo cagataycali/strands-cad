@@ -74,6 +74,8 @@ TOOL_GROUPS: dict[str, tuple[str, list[str]]] = {
     "neural": ("strands_cad.tools.neural_tools",
                ["neural_text_to_stl", "neural_image_to_stl",
                 "pointcloud_from_stl", "pointcloud_to_stl", "pointcloud_downsample"]),
+    "dashboard": ("strands_cad.tools.dashboard",
+                  ["dashboard_start", "dashboard_stop", "dashboard_status"]),
 }
 
 
