@@ -3,6 +3,7 @@
 [![PyPI version](https://badge.fury.io/py/strands-cad.svg)](https://pypi.org/project/strands-cad/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![test](https://github.com/cagataycali/strands-cad/actions/workflows/test.yml/badge.svg)](https://github.com/cagataycali/strands-cad/actions/workflows/test.yml)
 
 **Atomic CAD, mesh, SDF, cadquery, neural & print tools for [Strands](https://github.com/strands-agents) agents.**
 
