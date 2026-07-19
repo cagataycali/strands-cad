@@ -14,3 +14,4 @@ venv/
 *.bgcode
 !examples/*.stl
 !tests/fixtures/*.stl
+examples/props/

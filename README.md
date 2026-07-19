@@ -233,6 +233,8 @@ pointcloud_to_stl(pointcloud_file="scan.xyz", output_stl="reconstructed.stl")  #
 
 Same pipeline powers parts for [strands-labs/robots](https://github.com/strands-labs/robots) — rover mounts, drone frames, gripper fingers: design → validate mass/inertia → simulate → print.
 
+**Runnable end-to-end script:** [`examples/robot_training_props.py`](examples/robot_training_props.py) builds 5 props (T-block 18.05g, peg board 32.47g, graded 30/40/50mm cube set), computes print-accurate inertia for each, emits one MJCF world, sim-sanity-runs it, and packs a print plate — ~5s, verified. Comments show how to author a strands-robots declarative benchmark (e.g. `push_t_to_goal` for an SO-101 arm) on the exact props you print.
+
 ### 6. Verify Before You Print
 
 Every mesh gets a free QA pass (all verified on the assets above):
