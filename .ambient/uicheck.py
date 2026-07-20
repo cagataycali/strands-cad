@@ -52,6 +52,14 @@ def run():
                 chk("dock_grip_present", grip is not None, "no #dockGrip")
                 # INVARIANT 5 (mobile): dock must be draggable via a gesture, expose window.__dockDraggable flag if implemented
                 if w <= 430:
+                    # INVARIANT 9 (mobile): the ●LIVE camera badge must NOT overlap the
+                    # floating header/navbar — they collided before the camtag offset fix.
+                    hd = box(pg, "header"); ct = box(pg, ".camtag")
+                    r["header"], r["camtag"] = hd, ct
+                    if hd and ct:
+                        ov = not (hd["bottom"] <= ct["y"] or ct["bottom"] <= hd["y"])
+                        chk("livebar_not_overlap_navbar", not ov,
+                            f"header bottom={hd['bottom']:.0f} vs camtag top={ct['y']:.0f}")
                     dd = pg.evaluate("()=>!!window.__dockDraggable")
                     chk("dock_finger_draggable", dd, "window.__dockDraggable not set (chat can't be dragged with fingers)")
                     # grip hit target should be >= 44px tall (Apple HIG min touch target)

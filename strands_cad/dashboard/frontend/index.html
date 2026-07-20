@@ -231,6 +231,9 @@
     .rail{display:none}                                 /* model menu → ☰ sheet */
     .camstage{width:100%;height:100%}
     .camstage img{object-fit:cover}                     /* fill, no letterbox */
+    /* push the ● LIVE badge BELOW the floating header so they don't overlap
+       (header ≈ safe-top + ~56px of brand/buttons). */
+    .camstage .camtag{top:calc(var(--safe-t) + 64px)}
 
     /* header floats as a translucent bar over the camera */
     header{position:fixed;top:0;left:0;right:0;z-index:46;
