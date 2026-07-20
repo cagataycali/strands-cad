@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "strands-cad"
-version = "0.5.0"
+version = "0.5.1"
 description = "🔧 CAD, mesh, SDF, cadquery, neural & print tools + WebAuthn-gated 3d printer dashboard for Strands agents - prompt-to-print pipeline"
 readme = "README.md"
 requires-python = ">=3.10"
