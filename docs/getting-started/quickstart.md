@@ -88,7 +88,7 @@ Open the URL, tap **Create passkey**, and you're watching the chamber camera liv
 claude mcp add strands-cad -- strands-cad-mcp
 ```
 
-All 59 tools become available inside Claude Code / Cursor / Kiro.
+All 65 tools become available inside Claude Code / Cursor / Kiro.
 
 ---
 

@@ -57,9 +57,9 @@ The same tool functions power both surfaces — no duplication:
 
 ```mermaid
 flowchart LR
-    TOOLS[strands_cad.tools\n65 @tool functions]
-    TOOLS --> A["Direct import\nAgent(tools=ALL_TOOLS)"]
-    TOOLS --> B["MCP server\nstrands-cad-mcp"]
+    TOOLS[strands_cad.tools<br/>65 @tool functions]
+    TOOLS --> A["Direct import<br/>Agent(tools=ALL_TOOLS)"]
+    TOOLS --> B["MCP server<br/>strands-cad-mcp"]
     B --> STDIO[stdio]
     B --> HTTP[StreamableHTTP]
 ```

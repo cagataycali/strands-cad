@@ -15,7 +15,7 @@ plus a **WebAuthn-gated live printer dashboard** with real-time chamber camera.
 
 ### Three ways to look at it
 
-- **🤖 For agent builders** — 59 atomic, composable tools over MCP. Drop them
+- **🤖 For agent builders** — 65 atomic, composable tools over MCP. Drop them
   into Claude Code / Cursor / Kiro / any Strands agent and your model can model,
   simulate, slice, and print in one conversation.
 - **🖨️ For makers** — a headless print farm brain: `pip install`, point it at
@@ -133,7 +133,7 @@ viewers, auto-reconnect, and a single held live-view session. (Verified live:
 | `STRANDS_CAD_AUTH_RP_ID` | derived | pin the WebAuthn relying-party id (a hostname) |
 | `STRANDS_CAD_AUTH_BOOTSTRAP` | — | one-time secret to gate the *first* enrollment |
 
-## The 59 Atomic Tools
+## The 65 Atomic Tools
 
 | Layer | Tools |
 |---|---|
@@ -144,6 +144,8 @@ viewers, auto-reconnect, and a single held live-view session. (Verified live:
 | **Neural** (AI generation) | `neural_text_to_stl`, `neural_image_to_stl` |
 | **Point Cloud** | `pointcloud_from_stl`, `pointcloud_to_stl`, `pointcloud_downsample` |
 | **STL / Mesh** | `stl_parse`, `stl_volume`, `stl_bbox`, `stl_weight`, `stl_repair`, `stl_transform`, `stl_convert`, `mesh_decimate`, `mesh_normalize`, `mesh_boolean`, `mesh_combine`, `mesh_hollow` |
+| **Printability / QA** | `stl_printability`, `stl_orient`, `stl_check_clearance` |
+| **2D → 3D** | `mesh_from_text`, `mesh_from_svg`, `mesh_from_image` |
 | **3MF** | `mf3_pack`, `mf3_unpack`, `mf3_read_metadata` |
 | **Slice** | `slice_bambu`, `slice_profile_get`, `slice_estimate` |
 | **Bambu Printer** | `bambu_connect`, `bambu_send`, `bambu_upload`, `bambu_status`, `bambu_control`, `bambu_camera`, `bambu_ams` |
@@ -154,7 +156,7 @@ viewers, auto-reconnect, and a single held live-view session. (Verified live:
 
 ## MCP Server (Claude Code, Claude Desktop, Cursor, Kiro)
 
-All 59 tools are exposable over the [Model Context Protocol](https://modelcontextprotocol.io/) via the `strands-cad-mcp` entrypoint (built on [strands-mcp-server](https://github.com/cagataycali/strands-mcp-server)).
+All 65 tools are exposable over the [Model Context Protocol](https://modelcontextprotocol.io/) via the `strands-cad-mcp` entrypoint (built on [strands-mcp-server](https://github.com/cagataycali/strands-mcp-server)).
 
 ### Claude Code
 

@@ -42,7 +42,7 @@ pip install strands-cad
 
     ---
 
-    **59 atomic, composable tools** over MCP. Drop them into Claude Code /
+    **65 atomic, composable tools** over MCP. Drop them into Claude Code /
     Cursor / Kiro / any Strands agent and your model can model, simulate,
     slice, and print in one conversation.
 
@@ -95,12 +95,12 @@ flowchart LR
       D4[Neural]:::p
     end
     D1 & D2 & D3 & D4 --> STL[[STL]]
-    STL --> V{Verify\nweight · overhangs\nbounds}
+    STL --> V{Verify<br/>weight · overhangs<br/>bounds}
     V --> M[3MF plate]
-    M --> S[Slice\nOrcaSlicer]
+    M --> S[Slice<br/>OrcaSlicer]
     S --> G[[G-code]]
     G --> B[🖨️ Bambu Lab]
-    B --> DASH[📱 Live Dashboard\nWebAuthn + camera]
+    B --> DASH[📱 Live Dashboard<br/>WebAuthn + camera]
     classDef p fill:#00bcd422,stroke:#00bcd4;
 ```
 
@@ -125,6 +125,6 @@ flowchart LR
 -   :material-download: [__Install__](getting-started/install.md) — one command, py3.10–3.13
 -   :material-rocket-launch: [__Quickstart__](getting-started/quickstart.md) — first part in 60s
 -   :material-book-open-variant: [__Concepts__](getting-started/concepts.md) — the atomic-tool philosophy
--   :material-tools: [__Tool Index__](reference/tools.md) — all 59 tools
+-   :material-tools: [__Tool Index__](reference/tools.md) — all 65 tools
 
 </div>

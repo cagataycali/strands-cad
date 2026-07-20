@@ -6,7 +6,7 @@ strands-cad is built on one rule: **one tool = one verb = one input shape = one
 output shape.** No tool orchestrates other tools; the *agent* composes them.
 
 This is what makes the library work so well as an MCP surface — the model sees
-59 small, predictable, well-typed verbs and chains them into whatever pipeline
+65 small, predictable, well-typed verbs and chains them into whatever pipeline
 the conversation needs.
 
 ### Design principles
@@ -49,12 +49,12 @@ flowchart LR
 
 ## Tool groups
 
-The 59 tools are organized into groups. Optional groups auto-disable if their
+The 65 tools are organized into groups. Optional groups auto-disable if their
 heavy dependency isn't installed — the library always imports.
 
 | Group | Dep | Loads by default? |
 |---|---|---|
-| `scad`, `gcode`, `stl`, `mf3`, `slice`, `bambu`, `meta`, `preview` | core | ✅ always |
+| `scad`, `gcode`, `stl`, `printability`, `mesh_gen`, `mf3`, `slice`, `bambu`, `meta`, `preview` | core | ✅ always |
 | `cadquery` | OCP / cadquery | ✅ (in core deps) |
 | `sdf` | fogleman/sdf | ⬇️ git extra |
 | `neural` | torch | ⬇️ `[neural]` |
@@ -68,7 +68,7 @@ from strands_cad.tools import __all__   # names of loaded tools
 
 ## Three lenses on the same library
 
-The same 59 tools serve very different users:
+The same 65 tools serve very different users:
 
 | You are… | You care about | Start here |
 |---|---|---|

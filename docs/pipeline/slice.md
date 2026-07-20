@@ -82,7 +82,7 @@ gcode_preview_png("plate.gcode", output_png="toolpath.png")
 flowchart LR
     STLS[STL parts] --> PACK[mf3_pack]
     PACK --> MF3[[plate.3mf]]
-    MF3 --> ORCA[slice_bambu\nOrcaSlicer]
+    MF3 --> ORCA[slice_bambu<br/>OrcaSlicer]
     ORCA --> G[[plate.gcode]]
     G --> EST[slice_estimate]
     G --> CHK[gcode_check]
