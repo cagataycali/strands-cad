@@ -1,4 +1,4 @@
-"""Slice layer — Bambu Studio CLI bridge + G-code inspection."""
+"""Slice layer — OrcaSlicer / Bambu Studio CLI bridge + G-code inspection."""
 from __future__ import annotations
 import re
 import shutil
@@ -261,7 +261,13 @@ def slice_bambu(
     printer_model: str = "Bambu Lab X2D",
     extra_args: list[str] | None = None,
 ) -> dict:
-    """Slice a 3MF using Bambu Studio CLI.
+    """Slice a 3MF into Bambu-flavored G-code.
+
+    Backend resolution order: containerized OrcaSlicer (reproducible, shipped
+    with strands-cad) → host Bambu Studio / OrcaSlicer CLI → PrusaSlicer
+    (fallback). OrcaSlicer/Bambu Studio emit proper Bambu G-code markers that
+    the printer firmware accepts; PrusaSlicer output is generic Marlin G-code
+    that Bambu firmware silently rejects — so prefer Orca for real prints.
 
     Args:
         input_3mf: Input .3mf plate.
@@ -269,7 +275,7 @@ def slice_bambu(
         profile: Built-in profile name (PLA_0_20, PETG_0_20, TPU_0_20, ABS_0_20, PLA_SILK_0_16).
         printer_model: Bambu machine preset (e.g. "Bambu Lab X2D", "Bambu Lab X1 Carbon",
             "Bambu Lab A1", "Bambu Lab P1S").
-        extra_args: Additional CLI args passed to Bambu Studio.
+        extra_args: Additional CLI args passed to the slicer.
 
     Returns:
         {status, content, path, log}

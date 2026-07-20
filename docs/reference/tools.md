@@ -95,7 +95,7 @@ Total: **65 tools** across 15 groups.
 
 | Tool | Description |
 |---|---|
-| `slice_bambu` | Slice a 3MF using Bambu Studio CLI. |
+| `slice_bambu` | Slice a 3MF into Bambu-flavored G-code. |
 | `slice_estimate` | Estimate print time + filament from G-code header comments. |
 | `slice_profile_get` | Fetch a built-in generic slicing profile. |
 
