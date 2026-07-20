@@ -61,7 +61,8 @@ def start_slice(input_name: str, profile: str = "", printer_model: str = "",
     from strands_cad.dashboard import config_store, models
     cfg = config_store.load()
     profile = profile or cfg.get("slice_profile", "PLA_0_20")
-    printer_model = printer_model or cfg.get("printer_model", "Bambu Lab P1S")
+    # coalesce empty-string too (persisted config may have "") → default X2D
+    printer_model = printer_model or cfg.get("printer_model") or "Bambu Lab X2D"
 
     jid = _new("slice", {"input": input_name, "profile": profile,
                          "printer_model": printer_model})
@@ -98,11 +99,12 @@ def start_slice(input_name: str, profile: str = "", printer_model: str = "",
                 _log(jid, "slice FAILED")
                 return
             gpath = r.get("path", str(out_gcode))
-            # estimate
+            # estimate reads the bare gcode (r['gcode']), not the .3mf bundle
             est = {}
             try:
                 from strands_cad.tools.slice import slice_estimate
-                est = slice_estimate(gcode_file=gpath)
+                _gc = r.get("gcode") or (str(out_gcode) if out_gcode.exists() else gpath)
+                est = slice_estimate(gcode_file=_gc)
             except Exception:
                 pass
             _set(jid, state="done", result={"gcode": gpath,
