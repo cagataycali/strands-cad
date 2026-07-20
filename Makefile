@@ -125,7 +125,8 @@ docker-build: ## build the strands-cad app image
 
 .PHONY: docker-slicer-build
 docker-slicer-build: ## build the OrcaSlicer sidecar image (headless CLI)
-	@docker build -t strands-cad-orcaslicer:latest docker/orcaslicer
+	@docker build -t strands-cad/orcaslicer:2.5.0 -t strands-cad-orcaslicer:latest docker/orcaslicer
+	@echo "✅ strands-cad/orcaslicer:2.5.0 built — slice_bambu auto-uses it (STRANDS_CAD_SLICER_DOCKER)"
 
 .PHONY: docker-up
 docker-up: ## start dashboard only (:$(DASH_PORT))
@@ -156,3 +157,26 @@ docker-ps: ## show container status
 .PHONY: docker-shell
 docker-shell: ## open a bash shell in a fresh app container
 	@$(COMPOSE) run --rm --entrypoint bash dashboard
+
+# ── OrcaSlicer container (reproducible Bambu-flavored slicer) ──────────────
+ORCA_IMAGE ?= strands-cad/orcaslicer:2.5.0
+ORCA_PKG   := docker/orcaslicer/orcaslicer-package.tar.gz
+
+.PHONY: orca-image orca-package orca-test
+orca-package:  ## Package the host-built OrcaSlicer into the docker build context
+	@test -d $$HOME/.local/share/OrcaSlicer/bin || \
+	  { echo "No host OrcaSlicer build at ~/.local/share/OrcaSlicer — build it first (see docker/orcaslicer/README.md)"; exit 1; }
+	cd $$HOME/.local/share/OrcaSlicer && tar czf $(CURDIR)/$(ORCA_PKG) .
+	@echo "packaged → $(ORCA_PKG)"
+
+orca-image: ## Build the OrcaSlicer docker image (needs orca-package first)
+	@test -f $(ORCA_PKG) || $(MAKE) orca-package
+	docker build -t $(ORCA_IMAGE) docker/orcaslicer
+
+orca-test: ## Smoke-test the OrcaSlicer image (slices a cube, checks Bambu markers)
+	@rm -rf /tmp/orca_smoke && mkdir -p /tmp/orca_smoke && cp examples/props/cube_30.stl /tmp/orca_smoke/ 2>/dev/null || cp tests/fixtures/*.stl /tmp/orca_smoke/cube_30.stl
+	docker run --rm --user $$(id -u):$$(id -g) -v /tmp/orca_smoke:/work $(ORCA_IMAGE) \
+	  --load-settings "/opt/orcaslicer/resources/profiles/BBL/machine/Bambu Lab X2D 0.4 nozzle.json;/opt/orcaslicer/resources/profiles/BBL/process/0.20mm Standard @BBL X2D.json" \
+	  --load-filaments "/opt/orcaslicer/resources/profiles/BBL/filament/Bambu PLA Basic @BBL X2D 0.4 nozzle.json" \
+	  --slice 0 --outputdir /work /work/cube_30.stl
+	@grep -q HEADER_BLOCK_START /tmp/orca_smoke/plate_1.gcode && echo "✅ Bambu gcode OK" || { echo "❌ missing Bambu markers"; exit 1; }

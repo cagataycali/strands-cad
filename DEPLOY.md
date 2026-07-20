@@ -65,12 +65,14 @@ Slicing needs OrcaSlicer, which drags in GTK/WebKit — kept OUT of the lean app
 image. Build the sidecar once:
 
 ```bash
-make docker-slicer-build   # → strands-cad-orcaslicer:latest
+make docker-slicer-build   # → strands-cad/orcaslicer:2.5.0
 ```
 
 Point `STRANDS_CAD_SLICER` at a wrapper that runs
-`docker run --rm -v $PWD:/work strands-cad-orcaslicer <args>` if you want the
-app container to slice via the sidecar. On bare metal, the native
+`docker run --rm -v $PWD:/work strands-cad/orcaslicer:2.5.0 <args>` if you want the
+app container to slice via the sidecar. `slice_bambu` **auto-detects** this
+image (env `STRANDS_CAD_SLICER_DOCKER_IMAGE`, default `strands-cad/orcaslicer:2.5.0`)
+and slices in-container for reproducible Bambu-flavored gcode. On bare metal, the native
 `~/.local/share/OrcaSlicer/bin/orca-slicer` is used directly.
 
 ## `.env` reference (essentials)

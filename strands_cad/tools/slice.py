@@ -110,6 +110,85 @@ def slice_profile_get(profile: str) -> dict:
     return ok(f"profile {key}", profile=PROFILES[key], name=key)
 
 
+def _find_orca_docker_image() -> str | None:
+    """Return the OrcaSlicer docker image tag if configured & available.
+
+    Enabled by STRANDS_CAD_SLICER_DOCKER (image tag, default
+    'strands-cad/orcaslicer:2.5.0'). Returns the tag if docker + image exist,
+    else None. This lets us slice inside a reproducible container so we never
+    depend on a host build again.
+    """
+    import os as _os, shutil as _sh, subprocess as _sp
+    if _os.getenv("STRANDS_CAD_SLICER_DOCKER", "").lower() in ("0", "false", "off", "no"):
+        return None
+    img = _os.getenv("STRANDS_CAD_SLICER_DOCKER_IMAGE", "strands-cad/orcaslicer:2.5.0")
+    if not _sh.which("docker"):
+        return None
+    try:
+        r = _sp.run(["docker", "image", "inspect", img],
+                    capture_output=True, text=True, timeout=15)
+        return img if r.returncode == 0 else None
+    except Exception:
+        return None
+
+
+def _slice_with_docker(image: str, input_3mf: str, output_gcode: str,
+                       profile: str = "PLA_0_20",
+                       printer_model: str = "Bambu Lab X2D",
+                       extra_args=None) -> dict:
+    """Slice a 3MF/STL using the containerized OrcaSlicer (reproducible).
+
+    Mounts the input's parent dir at /work and uses the profiles baked into
+    the image (/opt/orcaslicer/resources/profiles/BBL). Bambu-flavored gcode
+    (HEADER/EXECUTABLE/CONFIG blocks) is written next to the input.
+    """
+    src = Path(input_3mf).resolve()
+    out = Path(output_gcode).resolve()
+    if not src.exists():
+        return err(f"input not found: {src}")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    # Everything must live under one mounted dir so the container can read+write.
+    workdir = src.parent
+    P = "/opt/orcaslicer/resources/profiles/BBL"
+    prof = PROFILES.get(profile.upper())
+    layer = prof["layer_height"] if prof else 0.20
+    short_model = printer_model.replace("Bambu Lab ", "")
+    machine = f"{P}/machine/{printer_model} 0.4 nozzle.json"
+    process = f"{P}/process/{layer:.2f}mm Standard @BBL {short_model}.json"
+    material = (prof or {}).get("material", "PLA")
+    fil = {"PLA": f"Bambu PLA Basic @BBL {short_model} 0.4 nozzle.json",
+           "PLA_SILK": "Bambu PLA Silk @base.json",
+           "PETG": f"Bambu PETG Basic @BBL {short_model} 0.4 nozzle.json",
+           "TPU": "Bambu TPU 95A @base.json",
+           "ABS": f"Bambu ABS @BBL {short_model} 0.4 nozzle.json"}.get(material, "")
+    filament = f"{P}/filament/{fil}" if fil else ""
+    import os as _os
+    args = ["docker", "run", "--rm",
+            "--user", f"{_os.getuid()}:{_os.getgid()}",
+            "-v", f"{workdir}:/work",
+            image,
+            "--load-settings", f"{machine};{process}",
+            "--slice", "0", "--outputdir", "/work"]
+    if filament:
+        args[args.index("--slice"):args.index("--slice")] = ["--load-filaments", filament]
+    if material != "PLA" and not (extra_args and "--curr-bed-type" in extra_args):
+        args += ["--curr-bed-type", "Textured PEI Plate"]
+    if extra_args:
+        args += list(extra_args)
+    args.append(f"/work/{src.name}")
+    try:
+        r = subprocess.run(args, capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        return err("docker OrcaSlicer slicing timed out")
+    log = (r.stdout + r.stderr)[-2000:]
+    cands = sorted(workdir.glob("*.gcode"), key=lambda p: p.stat().st_mtime, reverse=True)
+    cands += sorted(workdir.glob("*.3mf"), key=lambda p: p.stat().st_mtime, reverse=True)
+    result = str(cands[0]) if cands else ""
+    if r.returncode != 0:
+        return err(f"docker slice failed (rc={r.returncode}): {log}")
+    return ok(f"sliced (docker OrcaSlicer) → {result}", path=result, log=log, slicer="docker")
+
+
 @tool
 def slice_bambu(
     input_3mf: str,
@@ -131,6 +210,11 @@ def slice_bambu(
     Returns:
         {status, content, path, log}
     """
+    # Prefer the reproducible containerized OrcaSlicer if available.
+    _img = _find_orca_docker_image()
+    if _img:
+        return _slice_with_docker(_img, input_3mf, output_gcode, profile,
+                                  printer_model, extra_args)
     cli = _find_bambu_cli()
     if not cli:
         # No Bambu/Orca CLI (e.g. ARM64 where Bambu ships no build) → try Prusa.

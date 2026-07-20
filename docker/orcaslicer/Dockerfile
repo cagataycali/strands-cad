@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 gstreamer1.0-gtk3 \
     libsecret-1-0 libwebkitgtk-6.0-4 \
     libsoup-3.0-0 libnotify4 libsdl2-2.0-0 \
-    xvfb xauth ca-certificates locales \
+    ca-certificates locales \
     && rm -rf /var/lib/apt/lists/* \
     && locale-gen en_US.UTF-8
 
