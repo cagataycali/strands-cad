@@ -1,0 +1,99 @@
+/* strands-cad theme — cyan accents on black, print-farm cockpit vibe */
+
+:root {
+  --md-accent-fg-color: #00bcd4;
+  --md-accent-fg-color--transparent: rgba(0, 188, 212, 0.1);
+}
+
+[data-md-color-scheme="slate"] {
+  --md-default-bg-color: #0a0a0c;
+  --md-code-bg-color: #15161a;
+}
+
+.md-header__title {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* Code blocks — cyan outline */
+.md-typeset pre code {
+  border-left: 3px solid var(--md-accent-fg-color);
+}
+
+.md-typeset .admonition {
+  border-left-width: 4px;
+}
+
+/* Landing hero */
+.hero {
+  text-align: center;
+  padding: 2.5rem 0 1.5rem;
+}
+.hero h1 {
+  font-size: 3rem;
+  margin-bottom: 0.15em;
+  background: linear-gradient(90deg, #00bcd4 0%, #7c4dff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero p {
+  font-size: 1.2rem;
+  opacity: 0.85;
+  max-width: 42rem;
+  margin: 0.4rem auto;
+}
+.hero .tagline {
+  font-family: var(--md-code-font);
+  font-size: 0.95rem;
+  color: var(--md-accent-fg-color);
+}
+
+/* Tool names in tables → monospace cyan */
+.md-typeset table td:first-child code {
+  font-weight: 600;
+  color: var(--md-accent-fg-color);
+}
+
+/* Card grid on landing */
+.grid.cards > ul > li,
+.grid > .card {
+  border: 1px solid rgba(0, 188, 212, 0.2);
+  border-radius: 10px;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+.grid.cards > ul > li:hover,
+.grid > .card:hover {
+  border-color: var(--md-accent-fg-color);
+  transform: translateY(-2px);
+}
+
+/* Gallery grid */
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+.gallery-grid figure {
+  margin: 0;
+  text-align: center;
+}
+.gallery-grid img {
+  width: 100%;
+  border-radius: 8px;
+  background: #111;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.gallery-grid figcaption {
+  font-size: 0.8rem;
+  opacity: 0.8;
+  margin-top: 0.3rem;
+}
+
+.mermaid {
+  background-color: transparent;
+}
+
+/* Badges row on home */
+.badges img { display: inline; margin: 0 2px; }
