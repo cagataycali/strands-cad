@@ -85,6 +85,8 @@ dev = ["pytest>=8.0", "pytest-cov", "build", "twine"]
 strands-cad-install-slicer = "strands_cad.install_slicer:main"
 strands-cad-mcp = "strands_cad.mcp:main"
 strands-cad-dashboard = "strands_cad.dashboard.server:main"
+strands-cad-thinker = "strands_cad.dashboard.thinker:main"
+strands-cad-telegram = "strands_cad.dashboard.telegram:main"
 
 [project.urls]
 Homepage   = "https://github.com/cagataycali/strands-cad"

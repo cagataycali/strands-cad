@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""🧠 strands-cad slow-thinker — background reflective loop (mirrors scout-the-rover).
+"""🧠 strands-cad slow-thinker — background reflective loop.
 
 Every THINKER_INTERVAL seconds (default 60s), this loop:
   1. Reads live printer state (gcode_state, progress, temps, AMS, camera)
@@ -261,3 +261,33 @@ def start() -> dict:
 def stop() -> dict:
     _state["running"] = False
     return {"ok": True}
+
+
+def main() -> None:
+    """Standalone entrypoint: run the slow-thinker loop as its own process
+    (used by systemd unit `strands-cad-thinker` and the docker `thinker` svc).
+    Blocks forever; the loop runs in a daemon thread so we just idle-wait."""
+    import time as _t
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+    try:
+        from strands_cad.dashboard import config_store as _cfg
+        _cfg.load()
+    except Exception as e:  # pragma: no cover
+        log.warning(f"config load failed: {e}")
+    r = start()
+    log.info(f"🧠 thinker standalone: {r}")
+    if not r.get("ok"):
+        raise SystemExit(1 if not r.get("disabled") else 0)
+    try:
+        while _state.get("running"):
+            _t.sleep(1)
+    except KeyboardInterrupt:
+        stop()
+        log.info("🧠 thinker interrupted — exiting")
+
+
+if __name__ == "__main__":
+    main()

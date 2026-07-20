@@ -27,3 +27,5 @@ system_prompt.prompt
 .strands_cad_config.json
 .strands_cad_plate.json
 *.bak
+docker/orcaslicer/orcaslicer-package.tar.gz
+00000.log

@@ -530,18 +530,28 @@ async def _autostart_bg():
         _config.load()
     except Exception as e:
         log.warning(f"config load at startup failed: {e}")
+    # In split-service mode (docker/systemd), telegram + thinker run as their
+    # OWN processes; set STRANDS_CAD_SPLIT_LOOPS=1 so the dashboard doesn't
+    # also start them (which would double-poll Telegram getUpdates).
+    _split = os.getenv("STRANDS_CAD_SPLIT_LOOPS", "").lower() in ("1", "true", "yes")
     # telegram command poll loop (accepts /status /snapshot /ask ... from operator)
-    try:
-        r = _telegram.start_polling()
-        log.info(f"📱 telegram polling: {r}")
-    except Exception as e:
-        log.warning(f"telegram autostart failed: {e}")
+    if _split or os.getenv("STRANDS_CAD_NO_TELEGRAM", "").lower() in ("1", "true", "yes"):
+        log.info("📱 telegram autostart skipped (split-loops / disabled)")
+    else:
+        try:
+            r = _telegram.start_polling()
+            log.info(f"📱 telegram polling: {r}")
+        except Exception as e:
+            log.warning(f"telegram autostart failed: {e}")
     # 🧠 slow-thinker background loop
-    try:
-        r = _thinker.start()
-        log.info(f"🧠 thinker autostart: {r}")
-    except Exception as e:
-        log.warning(f"thinker autostart failed: {e}")
+    if _split or os.getenv("STRANDS_CAD_NO_THINKER", "").lower() in ("1", "true", "yes"):
+        log.info("🧠 thinker autostart skipped (split-loops / disabled)")
+    else:
+        try:
+            r = _thinker.start()
+            log.info(f"🧠 thinker autostart: {r}")
+        except Exception as e:
+            log.warning(f"thinker autostart failed: {e}")
 
 
 # ── static frontend ────────────────────────────────────────────────────────

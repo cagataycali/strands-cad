@@ -1,0 +1,18 @@
+[Unit]
+Description=strands-cad — Telegram bridge (chat with the printer from anywhere)
+PartOf=strands-cad.target
+After=network-online.target strands-cad-dashboard.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@INSTALL_DIR@
+EnvironmentFile=-@INSTALL_DIR@/.env
+ExecStart=@VENV@/bin/strands-cad-telegram
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=strands-cad.target default.target

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-📱 strands-cad dashboard — Telegram bridge (Bot API, mirrors scout-the-rover).
+📱 strands-cad dashboard — Telegram bridge.
 
 Lets the printer cockpit notify you and take commands over Telegram:
   • notify(text, photo)         → push job/print/camera alerts to your chat
@@ -210,3 +210,32 @@ def start_polling() -> Dict[str, Any]:
 def stop_polling() -> Dict[str, Any]:
     _poll["running"] = False
     return {"ok": True}
+
+
+def main() -> None:
+    """Standalone entrypoint: run only the Telegram poll loop as its own process
+    (systemd unit `strands-cad-telegram` / docker `telegram` svc). Blocks."""
+    import time as _t
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+    try:
+        from strands_cad.dashboard import config_store as _cfg
+        _cfg.load()
+    except Exception as e:  # pragma: no cover
+        log.warning(f"config load failed: {e}")
+    r = start_polling()
+    log.info(f"📱 telegram standalone: {r}")
+    if not r.get("ok"):
+        raise SystemExit(1)
+    try:
+        while _poll.get("running"):
+            _t.sleep(1)
+    except KeyboardInterrupt:
+        stop_polling()
+        log.info("📱 telegram interrupted — exiting")
+
+
+if __name__ == "__main__":
+    main()
