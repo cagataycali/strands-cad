@@ -70,8 +70,10 @@ def _find_bambu_cli() -> str | None:
     for cand in (
         "/Applications/BambuStudio.app/Contents/MacOS/BambuStudio",
         "/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer",
+        str(Path.home() / ".local/share/OrcaSlicer/bin/orca-slicer"),
         str(Path.home() / ".local/bin/orca-slicer"),
         str(Path.home() / "Applications/OrcaSlicer.AppImage"),
+        "/opt/OrcaSlicer/bin/orca-slicer",
         "/opt/OrcaSlicer/orca-slicer",
     ):
         if Path(cand).exists():
@@ -146,15 +148,20 @@ def slice_bambu(
     # Use official Bambu Studio machine/process/filament presets.
     # The CLI requires real preset JSONs (with type/name/from fields) —
     # ad-hoc key/value JSON files are rejected ("from unsupported").
-    profiles_dir = Path(cli).parent.parent / "Resources" / "profiles" / "BBL"
-    if not profiles_dir.exists():
-        for cand in (
-            Path("/usr/share/BambuStudio/profiles/BBL"),
-            Path.home() / ".config/BambuStudio/system/BBL",
-        ):
-            if cand.exists():
-                profiles_dir = cand
-                break
+    # Resolve the bundled profiles dir. Layouts differ:
+    #  macOS app : <cli>/../Resources/profiles/BBL
+    #  Linux pkg : <cli>/../../resources/profiles/BBL  (bin/orca-slicer)
+    _clip = Path(cli)
+    _cands = [
+        _clip.parent.parent / "Resources" / "profiles" / "BBL",   # macOS
+        _clip.parent.parent / "resources" / "profiles" / "BBL",   # Linux extracted (bin/)
+        _clip.parent / "resources" / "profiles" / "BBL",          # Linux (top-level)
+        Path.home() / ".local/share/OrcaSlicer/resources/profiles/BBL",
+        Path("/opt/OrcaSlicer/resources/profiles/BBL"),
+        Path("/usr/share/BambuStudio/profiles/BBL"),
+        Path.home() / ".config/BambuStudio/system/BBL",
+    ]
+    profiles_dir = next((c for c in _cands if c.exists()), _cands[0])
     prof = PROFILES.get(profile.upper())
     machine_json = profiles_dir / "machine" / f"{printer_model} 0.4 nozzle.json"
     layer = prof["layer_height"] if prof else 0.20
