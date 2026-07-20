@@ -1,0 +1,135 @@
+site_name: strands-cad
+site_url: https://cagataycali.github.io/strands-cad
+site_description: "The prompt-to-print pipeline for AI agents — atomic CAD, mesh, SDF, cadquery, neural & print tools for Strands, plus a WebAuthn-gated live printer dashboard."
+site_author: Cagatay Cali
+repo_url: https://github.com/cagataycali/strands-cad
+repo_name: cagataycali/strands-cad
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; 2026 Cagatay Cali — MIT
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - https://unpkg.com/mermaid@10/dist/mermaid.min.js
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Install: getting-started/install.md
+    - Quickstart: getting-started/quickstart.md
+    - Concepts: getting-started/concepts.md
+  - The Four Paths:
+    - Overview: paths/overview.md
+    - Parametric (OpenSCAD): paths/scad.md
+    - B-rep CAD (CadQuery): paths/cadquery.md
+    - Implicit Math (SDF): paths/sdf.md
+    - Neural (Text/Image → 3D): paths/neural.md
+    - 2D → 3D (text/svg/image): paths/two-to-three.md
+  - Prompt-to-Print Pipeline:
+    - Pipeline Overview: pipeline/overview.md
+    - Verify & QA: pipeline/verify.md
+    - Plate → Slice: pipeline/slice.md
+    - Bambu Printer Control: pipeline/print.md
+    - Robot Training Props: pipeline/robots.md
+  - Dashboard:
+    - Overview: dashboard/overview.md
+    - WebAuthn Security: dashboard/security.md
+    - Live Camera (RTSPS): dashboard/camera.md
+    - API Reference: dashboard/api.md
+  - MCP Server:
+    - Overview: mcp/overview.md
+    - Clients (Claude/Cursor/Kiro): mcp/clients.md
+    - HTTP Mode: mcp/http.md
+  - Reference:
+    - Tool Index (59): reference/tools.md
+    - Gallery: reference/gallery.md
+    - Environment Variables: reference/env.md
+    - Troubleshooting: reference/troubleshooting.md
+  - About:
+    - Why strands-cad?: about/why.md
+    - Architecture: about/architecture.md
+    - Related Projects: about/related.md
+    - Design Journal: JOURNAL.md
+
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/cube-scan
+  favicon: assets/favicon.svg
+  palette:
+    - scheme: default
+      primary: black
+      accent: cyan
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: black
+      accent: cyan
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.footer
+    - toc.follow
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.action.edit
+    - search.suggest
+    - search.highlight
+    - search.share
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format ''
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - pymdownx.betterem
+  - pymdownx.mark
+  - pymdownx.caret
+  - pymdownx.tilde
+  - pymdownx.keys
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - attr_list
+  - md_in_html
+  - tables
+  - def_list
+  - footnotes
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/cagataycali/strands-cad
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/strands-cad/
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/cagataycali

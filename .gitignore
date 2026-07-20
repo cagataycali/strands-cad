@@ -27,3 +27,4 @@ system_prompt.prompt
 *.bak
 00000.log
 docker/orcaslicer/orcaslicer-package.tar.gz
+site/

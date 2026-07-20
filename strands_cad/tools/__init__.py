@@ -35,6 +35,8 @@ _pull("gcode", ["gcode_check", "gcode_preview_png"])
 _pull("stl", ["stl_parse", "stl_volume", "stl_bbox", "stl_weight", "stl_repair",
               "stl_transform", "stl_convert", "mesh_decimate", "mesh_normalize",
               "mesh_boolean", "mesh_combine", "mesh_hollow"])
+_pull("printability", ["stl_printability", "stl_orient", "stl_check_clearance"])
+_pull("mesh_gen", ["mesh_from_text", "mesh_from_svg", "mesh_from_image"])
 _pull("mf3", ["mf3_pack", "mf3_unpack", "mf3_read_metadata"])
 _pull("slice", ["slice_bambu", "slice_profile_get", "slice_estimate"])
 _pull("bambu", ["bambu_connect", "bambu_send", "bambu_upload", "bambu_status",
