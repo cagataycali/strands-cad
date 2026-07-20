@@ -112,7 +112,10 @@ def start_slice(input_name: str, profile: str = "", printer_model: str = "",
             _log(jid, f"sliced → {Path(gpath).name} "
                       f"({est.get('estimated_time_hms','?')}, {est.get('filament_g','?')}g)")
             if then_print:
-                gname = Path(gpath).name
+                # Prefer the real OrcaSlicer .3mf project bundle (path) over the
+                # bare gcode — firmware accepts the proper bundle directly.
+                printable = r.get("path", gpath)
+                gname = Path(printable).name
                 _log(jid, f"→ chaining to print: {gname}")
                 pjid = start_print(gname, use_ams=use_ams, plate_index=plate_index)
                 _set(jid, result={"gcode": gpath, "rel": gname,
@@ -146,18 +149,31 @@ def start_print(gcode_name: str, use_ams: bool = True, plate_index: int = 1) -> 
                 _set(jid, state="error", error="printer not configured")
                 return
             from strands_cad.tools.bambu import (bambu_connect, bambu_upload, bambu_send)
-            # Bambu firmware rejects a bare .gcode via project_file (state→FAILED,
-            # empty gcode_file). Wrap sliced gcode into a Bambu 3MF project bundle
-            # (Metadata/plate_N.gcode + md5 + slice_info) that the printer accepts.
+            pm = cfg.get("printer_model") or "Bambu Lab X2D"
+            # Firmware needs a REAL OrcaSlicer .3mf project bundle. If the caller
+            # passed a bare .gcode, prefer a sibling .3mf produced by
+            # slice_bambu(--export-3mf); only wrap as a last resort.
             if src.suffix.lower() == ".gcode":
-                from strands_cad.tools.mf3 import bambu_gcode_3mf
-                pm = cfg.get("printer_model") or "Bambu Lab X2D"
-                wrapped = bambu_gcode_3mf(str(src), plate_index=plate_index, printer_model=pm)
-                if wrapped.get("status") != "success":
-                    _set(jid, state="error", error=f"wrap failed: {wrapped}")
-                    return
-                src = Path(wrapped["path"])
-                _log(jid, f"wrapped gcode → {src.name} (Bambu project bundle)")
+                sibling = src.with_suffix(".3mf")
+                if sibling.exists():
+                    src = sibling
+                    _log(jid, f"using sliced project bundle → {src.name}")
+                else:
+                    from strands_cad.tools.mf3 import bambu_gcode_3mf
+                    wrapped = bambu_gcode_3mf(str(src), plate_index=plate_index, printer_model=pm)
+                    if wrapped.get("status") != "success":
+                        _set(jid, state="error", error=f"wrap failed: {wrapped}")
+                        return
+                    src = Path(wrapped["path"])
+                    _log(jid, f"wrapped gcode → {src.name} (Bambu project bundle)")
+            # Ensure the .3mf carries the firmware printer model code (X2D=N6 …);
+            # OrcaSlicer CLI leaves it blank → firmware rejects with 0x05004037/46.
+            if src.suffix.lower() == ".3mf":
+                try:
+                    from strands_cad.tools.slice import _inject_model_code
+                    _inject_model_code(str(src), pm)
+                except Exception as _e:
+                    _log(jid, f"model-code inject skipped: {_e}")
             _log(jid, f"connecting {ip} …")
             rc = bambu_connect(ip=ip, access_code=access, serial=serial or "")
             if rc.get("status") != "success":

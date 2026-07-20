@@ -175,7 +175,9 @@ def _slice_with_docker(image: str, input_3mf: str, output_gcode: str,
     if filament:
         args += ["--load-filaments", filament]
     args += ["--slice", "0", "--export-3mf", out_3mf_name, "--outputdir", "/work"]
-    if material != "PLA" and not (extra_args and "--curr-bed-type" in extra_args):
+    # ALWAYS force Textured PEI Plate: Bambu X2D/H2D do NOT support OrcaSlicer's
+    # default "Cool Plate" → firmware fail_reason 50348044 "build plate mismatch".
+    if not (extra_args and "--curr-bed-type" in extra_args):
         args += ["--curr-bed-type", "Textured PEI Plate"]
     if extra_args:
         args += list(extra_args)
@@ -323,7 +325,9 @@ def slice_bambu(
         if filament_json.exists():
             args += ["--load-filaments", str(filament_json)]
     # Non-PLA materials aren't allowed on the default Cool Plate — pick PEI
-    if material != "PLA" and not (extra_args and "--curr-bed-type" in extra_args):
+    # ALWAYS force Textured PEI Plate: Bambu X2D/H2D do NOT support OrcaSlicer's
+    # default "Cool Plate" → firmware fail_reason 50348044 "build plate mismatch".
+    if not (extra_args and "--curr-bed-type" in extra_args):
         args += ["--curr-bed-type", "Textured PEI Plate"]
     if extra_args:
         args.extend(extra_args)
