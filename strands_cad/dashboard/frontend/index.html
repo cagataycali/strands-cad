@@ -212,6 +212,8 @@
   .msg.a{align-self:flex-start;background:rgba(255,255,255,.07);border:1px solid var(--line)}
   .msg.sys{align-self:center;color:var(--dim);font-size:11px;background:none;padding:2px}
   .msg.voice{align-self:flex-start;background:rgba(0,217,255,.1);border:1px solid rgba(0,217,255,.3)}
+  .msg.thinking{animation:pulse 1.2s infinite}
+  .sendbtn:disabled{opacity:.45;cursor:not-allowed}
   .msg.tool{align-self:center;color:var(--accent2);font-size:11px;background:rgba(0,217,255,.06);border-radius:8px;font-family:ui-monospace,monospace}
   .dockin{display:flex;gap:8px;align-items:flex-end}
   .dockin textarea{flex:1;resize:none;height:44px;max-height:120px;padding:11px}
@@ -317,6 +319,7 @@
   .warn{background:rgba(255,206,84,.1);border:1px dashed rgba(255,206,84,.4);color:var(--warn);border-radius:12px;padding:12px;font-size:13px;margin:12px 0}
   .toast{position:fixed;bottom:calc(var(--dock-h) + 20px);left:50%;transform:translateX(-50%);background:#1a1a26;border:1px solid var(--line);padding:11px 18px;border-radius:12px;font-size:13px;opacity:0;transition:.3s;z-index:70;pointer-events:none}
   .toast.show{opacity:1}
+  @media(max-width:760px){.toast{bottom:calc(90px + var(--safe-b))}}
 </style>
 </head>
 <body>
@@ -724,8 +727,14 @@ async function poll(){ try{
   const s=await r.json();
   $('#statusDot').classList.toggle('on', !!s.connected);
   $('#serialPill').textContent=s.serial||'cockpit'; $('#statePill').textContent=s.gcode_state||'—';
+  // telemetry PiP mini-title mirrors the live state (was stuck on 'telemetry')
+  {const gs=s.gcode_state; const mini=$('#statePillMini');
+   mini.textContent=gs?gs.toLowerCase():'idle';
+   mini.style.color=gs==='RUNNING'?'var(--ok)':gs==='FAILED'?'var(--hot)':gs==='PAUSE'?'var(--warn)':'var(--dim)';}
   $('#job').textContent=s.subtask_name||'—'; $('#pct').textContent=(s.progress!=null?s.progress+'%':'—');
   $('#barFill').style.width=(s.progress||0)+'%';
+  $('#barFill').style.background = s.gcode_state==='FAILED' ? 'var(--hot)'
+        : (s.progress>=100 ? 'var(--ok)' : 'linear-gradient(90deg,var(--accent),var(--accent2))');
   $('#layer').textContent=(s.layer!=null?s.layer+' / '+(s.total_layers||'?'):'—');
   $('#eta').textContent=fmtEta(s.remaining_min);
   const sd=$('#sdcard'); if(s.sdcard===false){ sd.textContent='⚠️ none'; sd.style.color='var(--hot)'; }
@@ -757,10 +766,12 @@ window.addMsg=addMsg;
 async function pollChatStatus(){ try{ const s=await (await fetch('/api/chat/status',{headers:authHeaders()})).json();
   $('#statePill').title=s.ready?`${s.tools} tools`:''; }catch(e){} }
 window.sendChat = async ()=>{ const inp=$('#chatInput'); const q=inp.value.trim(); if(!q)return; inp.value='';
-  addMsg('u',q); const wait=addMsg('a','…');
+  addMsg('u',q); const wait=addMsg('a','…'); wait.classList.add('thinking');
+  const sb=$('.sendbtn'); if(sb){sb.disabled=true;} inp.disabled=true;
   try{ const d=await (await fetch('/api/chat',{method:'POST',headers:J(),body:JSON.stringify({prompt:q})})).json();
-    wait.textContent=d.reply||('⚠️ '+(d.error||'no reply')); }
-  catch(e){ wait.textContent='⚠️ '+e.message; }
+    wait.textContent=d.reply||('reply error: '+(d.error||'no reply')); }
+  catch(e){ wait.textContent='error: '+e.message; }
+  finally{ wait.classList.remove('thinking'); if(sb){sb.disabled=false;} inp.disabled=false; inp.focus(); }
   loadModels(); refreshPlate(); };
 
 // ── voice (OpenAI Realtime over WebRTC) with transcript display ───────
