@@ -136,17 +136,33 @@ def bambu_send(file_path: str, plate_index: int = 1, use_ams: bool = True) -> di
     # the printer silently rejects the job). AMS mapping only exists inside a
     # 3MF, so use_ams is meaningful only for 3MF projects.
     param = src.name if is_gcode else f"Metadata/plate_{plate_index}.gcode"
+    # Bambu firmware validation (verified against real X2D + BambuTools/bambulabs_api):
+    #  • url MUST be "ftp:///<name>" (SD root). "file:///mnt/sdcard/..." → error
+    #    0x05004002 "Unsupported print file path or name".
+    #  • the printed file should be a REAL OrcaSlicer .3mf project bundle whose
+    #    slice_info.config carries the printer *model code* (e.g. X2D=N6). A bare
+    #    gcode or a hand-wrapped 3mf → 0x05004037/46 "file invalid / incompatible".
+    #  • send both "file" and "url"; clear any latched error first.
+    client.publish(f"device/{serial}/request",
+                   json.dumps({"print": {"sequence_id": str(int(time.time())),
+                                          "command": "clean_print_error"}}))
+    time.sleep(1.0)
     payload = {
         "print": {
             "sequence_id": str(int(time.time())),
             "command": "project_file",
             "param": param,
-            "subtask_name": src.stem,
-            "url": f"file:///mnt/sdcard/{src.name}",
-            "bed_type": "auto",
-            "timelapse": True,
-            "flow_cali": False,
-            "use_ams": (use_ams and not is_gcode),
+            "file": src.name,
+            "url": f"ftp:///{src.name}",
+            "bed_type": "textured_plate",
+            "bed_leveling": True,
+            "flow_cali": True,
+            "vibration_cali": True,
+            "layer_inspect": True,
+            "timelapse": False,
+            "use_ams": use_ams,
+            "ams_mapping": [0],
+            "skip_objects": None,
         }
     }
     client.publish(f"device/{serial}/request", json.dumps(payload))
@@ -187,9 +203,8 @@ def bambu_upload(file_path: str, remote_name: str = "") -> dict:
     sd = last.get("sdcard")
     if sd is False:
         return err("553 would fail: printer reports NO SD/microSD card inserted "
-                   "(sdcard=False). Insert a FAT32 microSD card into the printer "
-                   "to enable file upload + LAN printing.",
-                   sdcard=False, hint="insert_sd_card")
+                   "(sdcard=False). Insert a FAT32 microSD/USB into the printer "
+                   "to enable file upload + LAN printing.")
 
     import ftplib
 

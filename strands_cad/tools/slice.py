@@ -163,14 +163,18 @@ def _slice_with_docker(image: str, input_3mf: str, output_gcode: str,
            "ABS": f"Bambu ABS @BBL {short_model} 0.4 nozzle.json"}.get(material, "")
     filament = f"{P}/filament/{fil}" if fil else ""
     import os as _os
+    # Export a REAL OrcaSlicer .3mf project (firmware requires a full bundle;
+    # a bare gcode or hand-wrapped 3mf → error 0x05004037/46 "file invalid").
+    out_3mf_name = out.stem + ".3mf"
     args = ["docker", "run", "--rm",
             "--user", f"{_os.getuid()}:{_os.getgid()}",
+            "-e", "XDG_RUNTIME_DIR=/tmp", "-e", "HOME=/tmp",
             "-v", f"{workdir}:/work",
             image,
-            "--load-settings", f"{machine};{process}",
-            "--slice", "0", "--outputdir", "/work"]
+            "--load-settings", f"{machine};{process}"]
     if filament:
-        args[args.index("--slice"):args.index("--slice")] = ["--load-filaments", filament]
+        args += ["--load-filaments", filament]
+    args += ["--slice", "0", "--export-3mf", out_3mf_name, "--outputdir", "/work"]
     if material != "PLA" and not (extra_args and "--curr-bed-type" in extra_args):
         args += ["--curr-bed-type", "Textured PEI Plate"]
     if extra_args:
@@ -181,12 +185,70 @@ def _slice_with_docker(image: str, input_3mf: str, output_gcode: str,
     except subprocess.TimeoutExpired:
         return err("docker OrcaSlicer slicing timed out")
     log = (r.stdout + r.stderr)[-2000:]
-    cands = sorted(workdir.glob("*.gcode"), key=lambda p: p.stat().st_mtime, reverse=True)
-    cands += sorted(workdir.glob("*.3mf"), key=lambda p: p.stat().st_mtime, reverse=True)
-    result = str(cands[0]) if cands else ""
     if r.returncode != 0:
         return err(f"docker slice failed (rc={r.returncode}): {log}")
-    return ok(f"sliced (docker OrcaSlicer) → {result}", path=result, log=log, slicer="docker")
+
+    # Inject the printer *model code* into the exported 3mf's slice_info.config —
+    # OrcaSlicer CLI leaves printer_model_id empty, which the firmware rejects.
+    out_3mf = workdir / out_3mf_name
+    if out_3mf.exists():
+        try:
+            _inject_model_code(out_3mf, printer_model)
+        except Exception as e:  # non-fatal; gcode still usable
+            log += f"\n(model-code inject skipped: {e})"
+
+    # Also surface the bare gcode (for slice_estimate / preview).
+    gcode_cands = sorted(workdir.glob("*.gcode"), key=lambda q: q.stat().st_mtime, reverse=True)
+    if gcode_cands and str(gcode_cands[0]) != str(out):
+        try:
+            import shutil as _sh
+            _sh.copy(str(gcode_cands[0]), str(out))
+        except Exception:
+            pass
+
+    result = str(out_3mf) if out_3mf.exists() else (str(gcode_cands[0]) if gcode_cands else "")
+    return ok(f"sliced (docker OrcaSlicer) → {result}",
+              path=result, gcode=str(out) if out.exists() else "",
+              log=log, slicer="docker")
+
+
+# Bambu printer *model codes* the firmware validates in slice_info.config.
+# (verified: X2D=N6; others from BambuStudio machine defs.)
+_MODEL_CODE = {
+    "Bambu Lab X2D": "N6",
+    "Bambu Lab H2D": "O1D",
+    "Bambu Lab X1 Carbon": "BL-P001",
+    "Bambu Lab X1": "BL-P002",
+    "Bambu Lab X1E": "C13",
+    "Bambu Lab P1P": "C11",
+    "Bambu Lab P1S": "C12",
+    "Bambu Lab A1": "N2S",
+    "Bambu Lab A1 mini": "N1",
+}
+
+
+def _inject_model_code(three_mf, printer_model: str) -> None:
+    """Patch printer_model_id in a sliced .3mf's slice_info.config to the
+    firmware model code (OrcaSlicer CLI leaves it empty → firmware rejects)."""
+    import zipfile, re
+    code = _MODEL_CODE.get(printer_model)
+    if not code:
+        return
+    zin = zipfile.ZipFile(str(three_mf))
+    items = {n: zin.read(n) for n in zin.namelist()}
+    zin.close()
+    key = "Metadata/slice_info.config"
+    if key not in items:
+        return
+    si = items[key].decode()
+    si2 = re.sub(r'(key="printer_model_id" value=")[^"]*(")',
+                 rf'\g<1>{code}\g<2>', si)
+    if si2 == si:
+        return
+    items[key] = si2.encode()
+    with zipfile.ZipFile(str(three_mf), "w", zipfile.ZIP_DEFLATED) as z:
+        for n, data in items.items():
+            z.writestr(n, data)
 
 
 @tool
