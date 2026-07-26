@@ -113,6 +113,20 @@ def voice_tools() -> List[Dict[str, Any]]:
     ]
 
 
+def _extract_secret(data: Dict[str, Any]) -> str:
+    """Pull the ephemeral key out of any of OpenAI's response shapes.
+
+    Seen in the wild: {value: "ek_…"}, {client_secret: "ek_…"} and
+    {client_secret: {value: "ek_…"}}. The browser needs a plain string — handing
+    it a dict silently breaks the PeerConnection handshake.
+    """
+    secret = data.get("value")
+    if not secret:
+        cs = data.get("client_secret")
+        secret = cs.get("value") if isinstance(cs, dict) else cs
+    return secret or ""
+
+
 def mint_ephemeral() -> Dict[str, Any]:
     """Create a short-lived OpenAI Realtime client secret + session config.
 
@@ -155,10 +169,7 @@ def mint_ephemeral() -> Dict[str, Any]:
     except Exception as e:
         return {"ok": False, "error": f"mint failed: {e}"}
 
-    # response shape: {value/client_secret, expires_at, ...}
-    secret = (data.get("value") or data.get("client_secret")
-              or (data.get("client_secret") or {}).get("value"))
-    return {"ok": True, "client_secret": secret, "raw": data,
+    return {"ok": True, "client_secret": _extract_secret(data), "raw": data,
             "model": model, "voice": voice,
             "instructions": instructions, "tools": tools}
 
@@ -179,7 +190,6 @@ def _mint_legacy(api_key, model, voice, instructions, tools):
     except Exception as e:
         log.warning(f"legacy mint failed: {e}")
         return None
-    secret = (data.get("client_secret") or {}).get("value")
-    return {"ok": True, "client_secret": secret, "raw": data,
+    return {"ok": True, "client_secret": _extract_secret(data), "raw": data,
             "model": model, "voice": voice,
             "instructions": instructions, "tools": tools}

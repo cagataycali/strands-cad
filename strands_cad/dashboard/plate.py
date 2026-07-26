@@ -97,13 +97,21 @@ def state() -> Dict[str, Any]:
     return out
 
 
+def _ensure_loaded() -> None:
+    """Load persisted plate state once. MUST be called while holding _lock —
+    every mutating op needs this, otherwise the first mutation after process
+    start operates on the empty default and _save_disk() wipes the saved plate."""
+    if not _PLATE.get("_loaded"):
+        _load_disk()
+        _PLATE["_loaded"] = True
+
+
 def add_item(source: str, name: str = "", position=None, color: str = "") -> Dict[str, Any]:
     from strands_cad.dashboard import models
     if models._safe(source) is None:
         return {"error": f"source not in workdir: {source}"}
     with _lock:
-        if not _PLATE.get("_loaded"):
-            _load_disk(); _PLATE["_loaded"] = True
+        _ensure_loaded()
         n = len(_PLATE["items"])
         item = {
             "id": uuid.uuid4().hex[:8],
@@ -122,6 +130,7 @@ def add_item(source: str, name: str = "", position=None, color: str = "") -> Dic
 
 def update_item(item_id: str, **patch) -> Dict[str, Any]:
     with _lock:
+        _ensure_loaded()
         it = next((i for i in _PLATE["items"] if i["id"] == item_id), None)
         if not it:
             return {"error": "item not found"}
@@ -136,6 +145,7 @@ def update_item(item_id: str, **patch) -> Dict[str, Any]:
 def recolor(item_id: str, color: str) -> Dict[str, Any]:
     """Recolor one item, or ALL items if item_id in ('all','*')."""
     with _lock:
+        _ensure_loaded()
         if item_id in ("all", "*", ""):
             for it in _PLATE["items"]:
                 it["color"] = color
@@ -154,6 +164,7 @@ def recolor(item_id: str, color: str) -> Dict[str, Any]:
 
 def remove_item(item_id: str) -> Dict[str, Any]:
     with _lock:
+        _ensure_loaded()
         before = len(_PLATE["items"])
         _PLATE["items"] = [i for i in _PLATE["items"] if i["id"] != item_id]
         _PLATE["_updated"] = time.time()
@@ -163,6 +174,7 @@ def remove_item(item_id: str) -> Dict[str, Any]:
 
 def clear() -> Dict[str, Any]:
     with _lock:
+        _PLATE["_loaded"] = True  # deliberate wipe — no need to load first
         _PLATE["items"] = []
         _PLATE["_updated"] = time.time()
         _save_disk()
@@ -173,6 +185,7 @@ def auto_arrange(gap: float = 10.0) -> Dict[str, Any]:
     """Grid-arrange items on the bed so nothing overlaps (uses STL bbox)."""
     from strands_cad.dashboard import models
     with _lock:
+        _ensure_loaded()
         items = _PLATE["items"]
         bed = _PLATE.get("bed", [256, 256, 256])
         # compute footprints

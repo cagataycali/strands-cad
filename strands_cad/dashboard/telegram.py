@@ -110,10 +110,13 @@ def status() -> Dict[str, Any]:
 
 
 # ── optional command poll loop ──────────────────────────────────────────────
-def _allowed(user: Dict) -> bool:
-    _, _, allowed = _cfg()
+def _allowed(user: Dict, chat_id: str = "") -> bool:
+    _, chat, allowed = _cfg()
     if not allowed:
-        return True
+        # No allowlist configured → DENY strangers. The chat agent has shell +
+        # printer control, so "open to anyone who finds the bot" is not a safe
+        # default. Fall back to the configured owner chat only.
+        return bool(chat) and chat_id == str(chat)
     names = {a.strip() for a in allowed.split(",") if a.strip()}
     return (str(user.get("id")) in names or user.get("username", "") in names)
 
@@ -167,7 +170,7 @@ def _loop():
             user = msg.get("from") or {}
             text = msg.get("text") or ""
             chat_id = str((msg.get("chat") or {}).get("id", ""))
-            if not text or not _allowed(user):
+            if not text or not _allowed(user, chat_id):
                 continue
             try:
                 _handle(text, chat_id)
@@ -201,6 +204,12 @@ def start_polling() -> Dict[str, Any]:
         return {"ok": False, "error": "telegram_bot_token not set"}
     if _poll["running"]:
         return {"ok": True, "already": True}
+    old = _poll.get("thread")
+    if old is not None and old.is_alive():
+        # Previous loop is still draining its long-poll; flipping running=True
+        # now would revive it alongside a new thread → duplicate getUpdates
+        # consumers and Telegram 409s.
+        return {"ok": False, "error": "previous poll loop still stopping — retry in a few seconds"}
     _poll["running"] = True
     _poll["thread"] = threading.Thread(target=_loop, daemon=True, name="cad-telegram")
     _poll["thread"].start()
