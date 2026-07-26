@@ -2074,9 +2074,29 @@
 <td>Pin the WebAuthn relying-party id (a hostname)</td>
 </tr>
 <tr>
+<td><code>STRANDS_CAD_AUTH_ORIGIN</code></td>
+<td>derived from <code>Host</code></td>
+<td>Comma-separated expected-origin allowlist (set behind a reverse proxy)</td>
+</tr>
+<tr>
+<td><code>STRANDS_CAD_AUTH_TICKET_TTL</code></td>
+<td><code>60</code></td>
+<td>Lifetime of camera-only stream tickets, seconds</td>
+</tr>
+<tr>
 <td><code>STRANDS_CAD_AUTH_BOOTSTRAP</code></td>
 <td>—</td>
 <td>One-time secret gating the <em>first</em> enrollment</td>
+</tr>
+<tr>
+<td><code>STRANDS_CAD_DASH_CORS</code></td>
+<td><em>(empty)</em></td>
+<td>Comma-separated CORS origins. Empty = no CORS (same-origin needs none)</td>
+</tr>
+<tr>
+<td><code>STRANDS_CAD_DASH_DOCS</code></td>
+<td><code>false</code></td>
+<td>Expose <code>/docs</code>, <code>/redoc</code>, <code>/openapi.json</code> (still auth-gated)</td>
 </tr>
 </tbody>
 </table>

@@ -1253,6 +1253,39 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#tokens-never-travel-in-urls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tokens never travel in URLs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#origin-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Origin verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fail-closed-store" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fail-closed store
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#why-tls" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1908,6 +1941,39 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#tokens-never-travel-in-urls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tokens never travel in URLs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#origin-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Origin verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fail-closed-store" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fail-closed store
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#why-tls" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1983,16 +2049,41 @@ to phish, no cloud. 100% on your LAN.</p>
     S--&gt;&gt;B: challenge
     B-&gt;&gt;B: sign with passkey
     B-&gt;&gt;S: POST /auth/login/finish
-    S--&gt;&gt;B: short-lived JWT session
-    B-&gt;&gt;S: /api/* + camera (Bearer JWT)</code></pre>
+    S--&gt;&gt;B: short-lived JWT session (httponly cookie + Bearer)
+    B-&gt;&gt;S: every route (Bearer JWT / cookie)
+    B-&gt;&gt;S: POST /auth/ticket → 60s camera-only ticket
+    B-&gt;&gt;S: /api/camera/stream?ticket=… (&lt;img&gt; can't send headers)</code></pre>
 <ol>
 <li><strong>First visit</strong> → the dashboard is <em>unsealed</em>; you enroll an admin passkey.
    The private key never leaves your device's secure enclave — the server only
    stores the <strong>public</strong> key.</li>
-<li><strong>From then on</strong> it's <em>sealed</em>: every <code>/api/*</code> call and the camera stream
-   require a valid short-lived JWT, minted only by proving your passkey.</li>
+<li><strong>From then on</strong> it's <em>sealed</em>: <strong>every</strong> route except <code>/</code>, <code>/api/health</code> and
+   the <code>/auth/*</code> login surface requires a valid short-lived JWT, minted only by
+   proving your passkey. New routes are sealed by default.</li>
 <li><strong>No passwords, nothing to phish, no cloud.</strong></li>
 </ol>
+<h2 id="tokens-never-travel-in-urls">Tokens never travel in URLs<a class="headerlink" href="#tokens-never-travel-in-urls" title="Permanent link">&para;</a></h2>
+<p>A session JWT grants full printer control, and URLs leak — into access logs,
+browser history and <code>Referer</code> headers. So the session token is accepted <strong>only</strong>
+from the <code>Authorization: Bearer</code> header or the <code>httponly</code> session cookie; a
+<code>?token=</code> in the query string is rejected with <code>401</code>.</p>
+<p>The one client that physically cannot send a header is the <code>&lt;img&gt;</code> tag pulling
+the MJPEG camera stream. It uses a <strong>ticket</strong> instead: <code>POST /auth/ticket</code> mints
+a 60-second, <code>camera</code>-scoped JWT. Tickets are refused everywhere else (<code>403</code>),
+so a leaked one buys a minute of chamber video — not your printer.</p>
+<h2 id="origin-verification">Origin verification<a class="headerlink" href="#origin-verification" title="Permanent link">&para;</a></h2>
+<p>WebAuthn's replay defence rests on comparing the assertion's origin against the
+origin the server <em>expects</em>. The expected origin is derived from the <code>Host</code>
+header (which a browser sets from the URL bar and cannot forge cross-origin) —
+never from the request's own <code>Origin</code> header, which would make the comparison
+<code>origin == origin</code> and always pass. Behind a reverse proxy, pin it explicitly
+with <code>STRANDS_CAD_AUTH_ORIGIN</code> (comma-separated for multiple origins).</p>
+<h2 id="fail-closed-store">Fail-closed store<a class="headerlink" href="#fail-closed-store" title="Permanent link">&para;</a></h2>
+<p>Credentials and the JWT secret live in one JSON file. If that file exists but
+can't be parsed, the dashboard <strong>stays locked</strong> and reports the problem — it does
+<em>not</em> regenerate the store, because a fresh store has zero credentials and would
+invite the next visitor to enroll their own passkey on your printer. Restore from
+backup, or delete the file deliberately to start over.</p>
 <h2 id="why-tls">Why TLS?<a class="headerlink" href="#why-tls" title="Permanent link">&para;</a></h2>
 <p>WebAuthn only runs in a <strong>secure context</strong> (HTTPS or <code>localhost</code>). <code>--tls</code> mints
 a self-signed cert (SANs for every LAN IP + hostname) so passkeys work when you
@@ -2031,6 +2122,10 @@ auto-detected for a <strong>zero-warning trusted cert</strong> — no browser sc
 <td><code>GET /auth/credentials</code></td>
 <td>List enrolled credentials</td>
 </tr>
+<tr>
+<td><code>POST /auth/ticket</code></td>
+<td>Mint a 60s camera-only ticket (for <code>&lt;img&gt;</code>)</td>
+</tr>
 </tbody>
 </table>
 <h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
@@ -2054,6 +2149,16 @@ auto-detected for a <strong>zero-warning trusted cert</strong> — no browser sc
 <td>Pin the WebAuthn relying-party id (a hostname)</td>
 </tr>
 <tr>
+<td><code>STRANDS_CAD_AUTH_ORIGIN</code></td>
+<td>derived from <code>Host</code></td>
+<td>Comma-separated expected origin allowlist (set behind a proxy)</td>
+</tr>
+<tr>
+<td><code>STRANDS_CAD_AUTH_TICKET_TTL</code></td>
+<td><code>60</code></td>
+<td>Camera-ticket lifetime, seconds</td>
+</tr>
+<tr>
 <td><code>STRANDS_CAD_AUTH_BOOTSTRAP</code></td>
 <td>—</td>
 <td>One-time secret to gate the <em>first</em> enrollment</td>
@@ -2063,8 +2168,24 @@ auto-detected for a <strong>zero-warning trusted cert</strong> — no browser sc
 <td><code>false</code></td>
 <td>Serve HTTPS (needed for LAN passkeys)</td>
 </tr>
+<tr>
+<td><code>STRANDS_CAD_DASH_CORS</code></td>
+<td><em>(empty)</em></td>
+<td>Comma-separated CORS origins. Empty = none; same-origin needs no CORS</td>
+</tr>
+<tr>
+<td><code>STRANDS_CAD_DASH_DOCS</code></td>
+<td><code>false</code></td>
+<td>Expose <code>/docs</code>, <code>/redoc</code>, <code>/openapi.json</code> (still auth-gated)</td>
+</tr>
 </tbody>
 </table>
+<div class="admonition warning">
+<p class="admonition-title">CORS is off by default</p>
+<p><code>allow_origins=["*"]</code> together with credentials would let <em>any</em> page you
+visit drive your printer with your session cookie. Only set
+<code>STRANDS_CAD_DASH_CORS</code> if a genuinely separate front-end origin needs it.</p>
+</div>
 <div class="admonition warning">
 <p class="admonition-title">Bootstrap the first enrollment</p>
 <p>On an open LAN, set <code>STRANDS_CAD_AUTH_BOOTSTRAP</code> so only someone with the
