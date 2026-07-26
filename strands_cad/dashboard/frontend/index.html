@@ -612,9 +612,21 @@ window.login = async ()=>{ try{
 }catch(e){ toast('login error: '+e.message); } };
 window.logout = ()=>{ TOKEN=''; localStorage.removeItem('cad_token'); location.reload(); };
 
+// An <img> can't send an Authorization header, and putting the session JWT in
+// the URL would leak full printer control into logs/history/Referer. So we mint
+// a short-lived, CAMERA-ONLY ticket and put that in the query string instead.
+window.camReload = async ()=>{
+  const img=$('#cam'); if(!img) return;
+  let q='';
+  try{ const r=await fetch('/auth/ticket',{method:'POST',headers:J(),body:'{}'});
+    if(r.ok){ const t=await r.json(); q='?ticket='+encodeURIComponent(t.ticket)+'&t='+Date.now(); } }
+  catch(e){}
+  img.src='/api/camera/stream'+q;
+};
+
 function unlock(){
   $('#overlay').classList.add('hide');
-  $('#cam').src='/api/camera/stream'+(TOKEN?('?token='+encodeURIComponent(TOKEN)):'');
+  camReload();
   initPreview(); initPlate(); loadModels(); startTelemetry(); loadConfig(); pollChatStatus();
   initPips(); // sets up draggable plate + telemetry PiPs and does first refreshPlate()
 }
@@ -1040,7 +1052,7 @@ window.saveConfig = async ()=>{ const patch={};
   CFG_FILAMENTS.forEach((f,i)=>f.slot=i+1); patch.filaments=CFG_FILAMENTS;
   const r=await fetch('/api/config',{method:'POST',headers:J(),body:JSON.stringify(patch)});
   if(r.ok){ toast('config saved & applied'); $('#cfg_access_code').value=''; $('#cfg_openai_api_key').value=''; loadConfig(); refreshPlate();
-    $('#cam').src='/api/camera/stream?token='+encodeURIComponent(TOKEN)+'&t='+Date.now(); }
+    camReload(); }
   else toast('save failed'); };
 
 // ── telegram ─────────────────────────────────────────────────────────

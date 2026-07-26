@@ -67,9 +67,37 @@ BAMBU_IP = os.getenv("BAMBU_IP", "")
 BAMBU_ACCESS = os.getenv("BAMBU_ACCESS_CODE", "")
 BAMBU_SERIAL = os.getenv("BAMBU_SERIAL", "")
 
-app = FastAPI(title="strands-cad dashboard")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
-                   allow_methods=["*"], allow_headers=["*"])
+# /docs, /redoc and /openapi.json are OFF by default: they're unauthenticated in
+# FastAPI and hand an attacker a map of every print/control/shell route. Set
+# STRANDS_CAD_DASH_DOCS=1 to expose them (they still sit behind the auth guard
+# below, which covers them explicitly).
+_DOCS = os.getenv("STRANDS_CAD_DASH_DOCS", "").lower() in ("1", "true", "yes")
+app = FastAPI(title="strands-cad dashboard",
+              docs_url="/docs" if _DOCS else None,
+              redoc_url="/redoc" if _DOCS else None,
+              openapi_url="/openapi.json" if _DOCS else None)
+
+# CORS: `allow_origins=["*"]` with credentials meant any web page you visited
+# could drive your printer using your session cookie. Same-origin needs no CORS
+# at all, so default to an empty allowlist and let deployments opt in via
+# STRANDS_CAD_DASH_CORS (comma-separated origins).
+_CORS = [o.strip() for o in os.getenv("STRANDS_CAD_DASH_CORS", "").split(",") if o.strip()]
+if _CORS:
+    app.add_middleware(CORSMiddleware, allow_origins=_CORS, allow_credentials=True,
+                       allow_methods=["*"], allow_headers=["*"])
+
+
+def _session_response(request: Request, res: dict) -> JSONResponse:
+    """Return an auth result and pin the session cookie to this connection.
+
+    `secure` is set whenever the request arrived over TLS so the cookie can't be
+    replayed over a plaintext downgrade; plain-http localhost dev still works.
+    """
+    resp = JSONResponse(res)
+    resp.set_cookie("strands_cad_session", res["token"], httponly=True,
+                    samesite="lax", secure=request.url.scheme == "https",
+                    max_age=_auth.TOKEN_TTL)
+    return resp
 
 
 def _creds() -> tuple[str, str, str]:
@@ -79,6 +107,13 @@ def _creds() -> tuple[str, str, str]:
 
 
 # ── auth routes ────────────────────────────────────────────────────────────
+@app.exception_handler(_auth.AuthStoreCorrupt)
+async def _store_corrupt(request: Request, exc: _auth.AuthStoreCorrupt):
+    """Unreadable auth store → 503, never a reset. See auth.AuthStoreCorrupt."""
+    log.error(f"auth store unreadable: {exc}")
+    return JSONResponse({"error": str(exc)}, status_code=503)
+
+
 @app.get("/auth/status")
 async def auth_status(request: Request):
     return {**_auth.status(request), "available": True}
@@ -98,10 +133,7 @@ async def auth_reg_finish(request: Request):
     body = await request.json()
     res = _auth.finish_registration(request, body.get("challenge_id", ""),
                                     body.get("credential", {}))
-    resp = JSONResponse(res)
-    resp.set_cookie("strands_cad_session", res["token"], httponly=True,
-                    samesite="lax", max_age=_auth.TOKEN_TTL)
-    return resp
+    return _session_response(request, res)
 
 
 @app.post("/auth/login/begin")
@@ -114,10 +146,7 @@ async def auth_login_finish(request: Request):
     body = await request.json()
     res = _auth.finish_authentication(request, body.get("challenge_id", ""),
                                       body.get("credential", {}))
-    resp = JSONResponse(res)
-    resp.set_cookie("strands_cad_session", res["token"], httponly=True,
-                    samesite="lax", max_age=_auth.TOKEN_TTL)
-    return resp
+    return _session_response(request, res)
 
 
 @app.post("/auth/logout")
@@ -133,9 +162,29 @@ async def auth_creds(request: Request):
     return {"credentials": _auth.list_credentials()}
 
 
-# ── global auth guard: seal /api/* ─────────────────────────────────────────
+@app.post("/auth/ticket")
+async def auth_ticket(request: Request):
+    """Mint a short-lived, camera-only token for the MJPEG <img> tag.
+
+    An <img src> can't carry an Authorization header, and putting the session
+    JWT in the URL would leak full printer control into logs and history.
+    """
+    session = _auth.require_auth(request)
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    scope = body.get("scope", "camera")
+    return {"ticket": _auth.issue_ticket(session, scope=scope),
+            "scope": scope, "expires_in": _auth.TICKET_TTL}
+
+
+# ── global auth guard: seal everything except the login surface ────────────
 _PUBLIC_PREFIXES = ("/auth/",)
 _PUBLIC_EXACT = {"/", "/favicon.ico", "/api/health"}
+# Routes a browser can only reach by URL (no custom headers) → scoped ticket.
+_TICKET_ROUTES = {"/api/camera/stream": "camera"}
 
 
 @app.middleware("http")
@@ -145,11 +194,19 @@ async def _auth_mw(request: Request, call_next):
     path = request.url.path
     if path in _PUBLIC_EXACT or any(path.startswith(p) for p in _PUBLIC_PREFIXES):
         return await call_next(request)
-    if path.startswith("/api/"):
-        try:
+    try:
+        scope = _TICKET_ROUTES.get(path)
+        if scope:
+            _auth.require_ticket(request, scope=scope)
+        else:
+            # Guard EVERY non-public path, not just /api/* — /docs and any
+            # future route are sealed by default rather than by remembering to
+            # add a prefix here.
             _auth.require_auth(request)
-        except HTTPException as e:
-            return JSONResponse({"error": e.detail}, status_code=e.status_code)
+    except HTTPException as e:
+        return JSONResponse({"error": e.detail}, status_code=e.status_code)
+    except _auth.AuthStoreCorrupt as e:
+        return JSONResponse({"error": str(e)}, status_code=503)
     return await call_next(request)
 
 

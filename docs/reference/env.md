@@ -26,7 +26,11 @@ All the knobs, in one place.
 | `STRANDS_CAD_TLS` | `false` | Serve HTTPS (needed for LAN passkeys) |
 | `STRANDS_CAD_AUTH_ENABLED` | `true` | Master WebAuthn switch |
 | `STRANDS_CAD_AUTH_RP_ID` | derived | Pin the WebAuthn relying-party id (a hostname) |
+| `STRANDS_CAD_AUTH_ORIGIN` | derived from `Host` | Comma-separated expected-origin allowlist (set behind a reverse proxy) |
+| `STRANDS_CAD_AUTH_TICKET_TTL` | `60` | Lifetime of camera-only stream tickets, seconds |
 | `STRANDS_CAD_AUTH_BOOTSTRAP` | — | One-time secret gating the *first* enrollment |
+| `STRANDS_CAD_DASH_CORS` | *(empty)* | Comma-separated CORS origins. Empty = no CORS (same-origin needs none) |
+| `STRANDS_CAD_DASH_DOCS` | `false` | Expose `/docs`, `/redoc`, `/openapi.json` (still auth-gated) |
 
 ## Slicer
 
