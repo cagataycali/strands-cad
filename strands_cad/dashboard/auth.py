@@ -344,6 +344,50 @@ def finish_authentication(request: Request, challenge_id: str, credential: dict)
     return {"ok": True, "token": token, "credential_id": cred_id}
 
 
+def service_token(name: str = "service") -> str:
+    """Return a long-lived JWT for machine-to-machine callers (e.g. tiny.technology
+    driving this printer as an endpoint device). Stable across restarts: cached in
+    the auth store under 'service_tokens'.
+
+    Lets a trusted remote service ride the same signed-JWT auth the middleware
+    already checks, without an interactive passkey ceremony. Adapted from the
+    neon-G1 dashboard (same author, same auth module lineage).
+    """
+    store = _load()
+    toks = store.setdefault("service_tokens", {})
+    if name in toks:
+        # Reuse only if it still verifies under the CURRENT secret. A rotated
+        # jwt_secret (or a re-created store) must mint a fresh token rather than
+        # hand back one the middleware would reject.
+        try:
+            jwt.decode(toks[name], _jwt_secret(), algorithms=["HS256"],
+                       options={"verify_exp": False})
+            return toks[name]
+        except Exception:
+            pass
+    now = int(time.time())
+    payload = {"sub": f"service:{name}", "name": name, "iat": now,
+               "exp": now + 3650 * 86400}  # ~10y
+    tok = jwt.encode(payload, _jwt_secret(), algorithm="HS256")
+    toks[name] = tok
+    _save(store)
+    return tok
+
+
+def revoke_service_token(name: str) -> bool:
+    """Drop a named service token. The JWT stays cryptographically valid until
+    exp, so this is bookkeeping unless the secret is rotated -- callers wanting
+    hard revocation must rotate jwt_secret (which also invalidates sessions).
+    """
+    store = _load()
+    toks = store.get("service_tokens") or {}
+    if name not in toks:
+        return False
+    del toks[name]
+    _save(store)
+    return True
+
+
 def status(request=None) -> Dict[str, Any]:
     store = _load()
     out = {
