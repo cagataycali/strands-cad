@@ -17,6 +17,10 @@ venv/
 examples/props/
 # dashboard runtime artifacts
 .strands_cad_auth.json
+# ...and every backup of it. The store holds jwt_secret + passkey public
+# keys; the ambient UI loop commits with `git add -A`, so an un-ignored
+# rotate/bak copy would be pushed to the repo on its next cycle.
+.strands_cad_auth.json.*
 .strands_cad_tls/
 .coverage
 system_prompt.prompt
