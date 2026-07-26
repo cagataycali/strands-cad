@@ -1,8 +1,10 @@
 """Preview layer — auto-refresh HTTP server for renders."""
 from __future__ import annotations
+import html
 import http.server
 import socketserver
 import threading
+import urllib.parse
 from pathlib import Path
 from typing import Any
 
@@ -38,8 +40,9 @@ def _make_handler(root: Path):
             if self.path in ("/", "/index.html"):
                 png_paths = sorted(set(list(root.glob("*.png")) + list(root.glob("**/*.png"))))
                 cards = "\n".join(
-                    f'<div class="card"><h3>{p.relative_to(root)}</h3>'
-                    f'<img src="{p.relative_to(root)}?t={int(p.stat().st_mtime)}"></div>'
+                    f'<div class="card"><h3>{html.escape(str(p.relative_to(root)))}</h3>'
+                    f'<img src="{urllib.parse.quote(str(p.relative_to(root)))}'
+                    f'?t={int(p.stat().st_mtime)}"></div>'
                     for p in png_paths[:24]
                 )
                 body = _INDEX_TEMPLATE.format(refresh=4, cards=cards or "<p style='color:#888'>no PNGs yet</p>")
@@ -56,8 +59,11 @@ def _make_handler(root: Path):
     return _H
 
 
-class _ReuseServer(socketserver.TCPServer):
+class _ReuseServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    # Threading: a single stalled browser connection must not block the other
+    # viewers (the page meta-refreshes every 4 s, so stalls are common).
     allow_reuse_address = True
+    daemon_threads = True
 
 
 @tool

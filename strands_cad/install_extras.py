@@ -11,12 +11,21 @@ Usage:
     python -m strands_cad.install_extras sdf        # SDF only
     python -m strands_cad.install_extras neural     # neural (shap-e) only
 """
+import importlib.util
+import shutil
 import subprocess
 import sys
 
 
 def _pip(*args) -> int:
-    return subprocess.call([sys.executable, "-m", "pip", "install", *args])
+    # uv-created venvs ship without pip — fall back to `uv pip` there.
+    if importlib.util.find_spec("pip") is not None:
+        return subprocess.call([sys.executable, "-m", "pip", "install", *args])
+    uv = shutil.which("uv")
+    if uv:
+        return subprocess.call([uv, "pip", "install", "-p", sys.executable, *args])
+    print("❌ neither pip nor uv found for this interpreter", file=sys.stderr)
+    return 1
 
 
 def install_sdf() -> int:

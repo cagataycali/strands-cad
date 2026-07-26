@@ -349,6 +349,15 @@ def slice_bambu(
     result = str(candidates[0]) if candidates else ""
     if r.returncode != 0:
         return err(f"slice failed (rc={r.returncode}): {log}")
+    # The slicer names its output itself (e.g. plate_1.gcode) — mirror the
+    # newest artifact to the caller's requested path so downstream tools can
+    # rely on `output_gcode` existing (parity with the docker backend).
+    if result and Path(result).suffix == out.suffix and str(out) != result:
+        try:
+            shutil.copy(result, out)
+            result = str(out)
+        except Exception:
+            pass
     return ok(f"sliced → {result}", path=result, log=log)
 
 

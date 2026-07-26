@@ -49,8 +49,9 @@ def sim_inertia_from_stl(
         vol_cm3 = vol_mm3 / 1000.0
         mass_g = vol_cm3 * effective_density
         com = m.center_mass.tolist()
-        # trimesh moment_inertia is in kg·m² for its density; scale for our mass
-        I = (m.moment_inertia * (mass_g / 1000.0) / max(m.mass, 1e-9)).tolist()
+        # trimesh moment_inertia carries the mesh's mm² length units — scale to
+        # our mass (kg) and convert mm² → m² so the result is true kg·m².
+        I = (m.moment_inertia * (mass_g / 1000.0) / max(m.mass, 1e-9) / 1e6).tolist()
         diag = [I[0][0], I[1][1], I[2][2]]
         return ok(f"mass={mass_g:.2f} g, vol={vol_cm3:.2f} cm³",
                   mass_g=mass_g, volume_cm3=vol_cm3, com=com, inertia=I,
@@ -200,8 +201,9 @@ def sim_view_live(mjcf_file: str) -> dict:
         return err(f"MJCF not found: {src}")
     try:
         # Prefer python -m mujoco.viewer (blocking) via subprocess so it doesn't kill the agent.
+        import sys as _sys
         p = subprocess.Popen(
-            ["python", "-m", "mujoco.viewer", "--mjcf", str(src)],
+            [_sys.executable, "-m", "mujoco.viewer", "--mjcf", str(src)],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
     except Exception as e:

@@ -44,6 +44,15 @@ dependencies = [
     "rtree",
     "fast-simplification>=0.1",
     "meshio>=5.0",
+    # trimesh format/feature backends (all ship wheels):
+    #   manifold3d → mesh_boolean/mesh_hollow, lxml → 3MF export,
+    #   svg.path+shapely+networkx+mapbox-earcut → mesh_from_svg extrusion.
+    "manifold3d>=2.0",
+    "lxml>=4.9",
+    "svg.path>=6.0",
+    "shapely>=2.0",
+    "networkx>=3.0",
+    "mapbox-earcut>=1.0",
     # Real CAD (B-rep / NURBS) — cadquery drags in numba; pin it forward so
     # the resolver never falls back to numba 0.53.1 / llvmlite 0.36 (py<3.10).
     "cadquery>=2.5",
@@ -79,7 +88,9 @@ dashboard = [
 all = [
     "strands-cad[neural,sim,dashboard]",
 ]
-dev = ["pytest>=8.0", "pytest-cov", "build", "twine"]
+# soft-webauthn = software authenticator, lets the test suite run a real passkey
+# ceremony (and a cross-origin attack) with no hardware key.
+dev = ["pytest>=8.0", "pytest-cov", "build", "twine", "soft-webauthn>=0.1"]
 
 [project.scripts]
 strands-cad-install-slicer = "strands_cad.install_slicer:main"

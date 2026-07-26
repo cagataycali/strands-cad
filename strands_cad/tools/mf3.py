@@ -144,9 +144,14 @@ def mf3_unpack(mf3_file: str, output_dir: str) -> dict:
         return err(f"3mf not found: {src}")
     dst.mkdir(parents=True, exist_ok=True)
     files: list[str] = []
-    with zipfile.ZipFile(src, "r") as z:
-        z.extractall(dst)
-        files = z.namelist()
+    try:
+        with zipfile.ZipFile(src, "r") as z:
+            z.extractall(dst)
+            files = z.namelist()
+    except zipfile.BadZipFile:
+        return err(f"not a valid 3mf/zip file: {src}")
+    except Exception as e:
+        return err(f"unpack failed: {type(e).__name__}: {e}")
     return ok(f"unpacked {len(files)} entries → {dst}", path=str(dst), files=files)
 
 

@@ -18,58 +18,6 @@ def _need_trimesh():
 
 
 @tool
-def mesh_boolean(
-    mesh_a: str,
-    mesh_b: str,
-    operation: str,
-    output_file: str,
-) -> dict:
-    """Boolean CSG between two meshes: union / difference / intersection.
-
-    Uses trimesh with the manifold3d engine (pip install manifold3d).
-    difference = A minus B.
-
-    Args:
-        mesh_a: First mesh path (STL/OBJ/PLY/GLB).
-        mesh_b: Second mesh path.
-        operation: 'union', 'difference', or 'intersection'.
-        output_file: Output mesh path (extension picks format).
-
-    Returns:
-        {status, content, path, watertight, volume_mm3}
-    """
-    trimesh, e = _need_trimesh()
-    if e:
-        return e
-    pa, pb = Path(mesh_a).resolve(), Path(mesh_b).resolve()
-    out = Path(output_file).resolve()
-    if not pa.exists():
-        return err(f"file not found: {pa}")
-    if not pb.exists():
-        return err(f"file not found: {pb}")
-    if operation not in ("union", "difference", "intersection"):
-        return err(f"unknown operation '{operation}'. Options: union, difference, intersection")
-    ma = trimesh.load(pa, force="mesh")
-    mb = trimesh.load(pb, force="mesh")
-    try:
-        fn = getattr(trimesh.boolean, operation)
-        result = fn([ma, mb])
-    except BaseException as ex:
-        return err(f"boolean failed: {ex}. Try: pip install manifold3d")
-    if result is None or len(result.faces) == 0:
-        return err("boolean produced empty mesh (objects may not overlap for intersection)")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    result.export(out)
-    return ok(
-        f"{operation}({pa.name}, {pb.name}) → {out} "
-        f"({len(result.faces)} faces, watertight={result.is_watertight})",
-        path=str(out), watertight=bool(result.is_watertight),
-        volume_mm3=float(result.volume) if result.is_watertight else None,
-        faces=int(len(result.faces)),
-    )
-
-
-@tool
 def mesh_from_image(
     image_file: str,
     output_file: str,
@@ -192,7 +140,7 @@ def mesh_from_svg(
         if isinstance(mesh, list):
             mesh = trimesh.util.concatenate(mesh)
     except BaseException as ex:
-        return err(f"svg extrude failed: {ex}. May need: pip install shapely networkx")
+        return err(f"svg extrude failed: {ex}. May need: pip install svg.path shapely networkx mapbox-earcut")
     out.parent.mkdir(parents=True, exist_ok=True)
     mesh.export(out)
     sz = (mesh.bounds[1] - mesh.bounds[0]).tolist()
@@ -243,44 +191,5 @@ def mesh_from_text(
     return ok(f'3D text "{text}" → {out}', path=str(out), text_value=text)
 
 
-@tool
-def mesh_decimate(
-    input_file: str,
-    output_file: str,
-    target_faces: int = 20000,
-) -> dict:
-    """Simplify a heavy mesh to a target face count (for gen-AI meshes, scans).
-
-    Args:
-        input_file: Input mesh path.
-        output_file: Output mesh path.
-        target_faces: Target triangle count (default 20k).
-
-    Returns:
-        {status, content, path, faces_before, faces_after}
-    """
-    trimesh, e = _need_trimesh()
-    if e:
-        return e
-    src = Path(input_file).resolve()
-    out = Path(output_file).resolve()
-    if not src.exists():
-        return err(f"file not found: {src}")
-    m = trimesh.load(src, force="mesh")
-    before = len(m.faces)
-    if before <= target_faces:
-        out.parent.mkdir(parents=True, exist_ok=True)
-        m.export(out)
-        return ok(f"already ≤ {target_faces} faces ({before}), copied → {out}",
-                  path=str(out), faces_before=before, faces_after=before)
-    try:
-        simplified = m.simplify_quadric_decimation(face_count=target_faces)
-    except BaseException:
-        try:
-            simplified = m.simplify_quadric_decimation(target_faces)
-        except BaseException as ex:
-            return err(f"decimation failed: {ex}. Try: pip install fast-simplification")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    simplified.export(out)
-    return ok(f"decimated {before} → {len(simplified.faces)} faces → {out}",
-              path=str(out), faces_before=before, faces_after=int(len(simplified.faces)))
+# NOTE: mesh_boolean and mesh_decimate live in strands_cad.tools.stl — the
+# duplicate (unregistered) definitions that used to live here were removed.

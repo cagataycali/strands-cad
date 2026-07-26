@@ -313,12 +313,86 @@ def bambu_control(action: str) -> dict:
     return ok(f"sent {action}", action=action)
 
 
+def _camera_rtsps_frame(ip: str, access: str, timeout: int = 25) -> bytes | None:
+    """Grab one JPEG frame from the RTSPS liveview (X1/X2/H2 series, port 322).
+
+    Verified against a real X-series printer: the port-6000 JPEG protocol is
+    P1/A1-only — X-series replies 0xffffffff and closes, so ffmpeg + RTSPS is
+    the working path here.
+    """
+    import shutil as _sh
+    import subprocess as _sp
+    import tempfile as _tf
+    import urllib.parse as _up
+    ffmpeg = _sh.which("ffmpeg")
+    if not ffmpeg:
+        try:
+            import imageio_ffmpeg  # type: ignore
+            ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        except Exception:
+            return None
+    url = f"rtsps://bblp:{_up.quote(access, safe='')}@{ip}:322/streaming/live/1"
+    tmp = Path(_tf.mkstemp(suffix=".jpg")[1])
+    try:
+        r = _sp.run([ffmpeg, "-y", "-loglevel", "error", "-rtsp_transport", "tcp",
+                     "-i", url, "-frames:v", "1", str(tmp)],
+                    capture_output=True, timeout=timeout)
+        if r.returncode == 0 and tmp.exists() and tmp.stat().st_size > 0:
+            return tmp.read_bytes()
+        return None
+    except Exception:
+        return None
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _camera_p1_frame(ip: str, access: str, timeout: int = 10) -> bytes | None:
+    """Grab one JPEG frame from the port-6000 TLS stream (P1/A1 series).
+
+    Protocol: send a 0x40-byte auth packet (magic, "bblp", access code), then
+    read 16-byte headers + JPEG payloads. An 8-byte 0xffffffff payload means
+    auth rejected / unsupported model (e.g. X-series → use RTSPS instead).
+    """
+    import socket
+    import struct
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        raw = socket.create_connection((ip, 6000), timeout=timeout)
+        s = ctx.wrap_socket(raw, server_hostname=ip)
+        s.settimeout(timeout)
+        auth = struct.pack("<IIII", 0x40, 0x3000, 0, 0)
+        auth += b"bblp".ljust(32, b"\0") + access.encode().ljust(32, b"\0")
+        s.write(auth)
+
+        def read_n(n: int) -> bytes:
+            buf = b""
+            while len(buf) < n:
+                c = s.recv(n - len(buf))
+                if not c:
+                    raise EOFError(f"stream closed at {len(buf)}/{n} bytes")
+                buf += c
+            return buf
+
+        for _ in range(4):  # first packets may be control frames
+            plen = struct.unpack("<I", read_n(16)[:4])[0]
+            payload = read_n(plen) if plen else b""
+            if payload[:2] == b"\xff\xd8":
+                s.close()
+                return payload
+        s.close()
+        return None
+    except Exception:
+        return None
+
+
 @tool
 def bambu_camera(save_path: str = "") -> dict:
-    """Fetch a JPEG snapshot from the printer's chamber camera.
+    """Fetch a JPEG snapshot from the printer's chamber camera (LAN mode).
 
-    Requires the printer's chamber camera to be enabled in LAN mode.
-    Uses the printer's authenticated JPEG stream (port 6000 rtsp or 8080 http).
+    Tries the RTSPS liveview (X1/X2/H2 series, port 322, via ffmpeg) first,
+    then the port-6000 TLS JPEG stream (P1/A1 series).
 
     Args:
         save_path: Optional path to save the JPEG. If empty, returns base64 in payload.
@@ -329,25 +403,17 @@ def bambu_camera(save_path: str = "") -> dict:
     with _LOCK:
         ip = _CONN["ip"]
         access = _CONN["access_code"]
-    try:
-        import requests  # type: ignore
-    except ImportError:
-        return err("requests required. pip install 'strands-cad[bambu]'")
-    # Bambu exposes: rtsps://bblp:<access>@<ip>:322/streaming/live/1
-    # HTTP snapshot on newer firmware:
-    url = f"http://{ip}:6000/snapshot.jpg"
-    try:
-        r = requests.get(url, timeout=5, auth=("bblp", access))
-        if r.status_code != 200 or not r.content:
-            return err(f"camera returned {r.status_code} (may need RTSP-only firmware)")
-    except Exception as e:
-        return err(f"camera fetch failed: {e}")
+    jpeg = _camera_rtsps_frame(ip, access) or _camera_p1_frame(ip, access)
+    if not jpeg:
+        return err("camera fetch failed: neither RTSPS (port 322, needs ffmpeg — "
+                   "`pip install imageio-ffmpeg`) nor the P1-series port-6000 stream "
+                   "returned a frame. Check LAN-mode liveview is enabled on the printer.")
     if save_path:
         p = Path(save_path).resolve()
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_bytes(r.content)
-        return ok(f"saved snapshot → {p} ({len(r.content)} bytes)", path=str(p))
-    return ok(f"snapshot ({len(r.content)} bytes)", jpeg_base64=base64.b64encode(r.content).decode())
+        p.write_bytes(jpeg)
+        return ok(f"saved snapshot → {p} ({len(jpeg)} bytes)", path=str(p))
+    return ok(f"snapshot ({len(jpeg)} bytes)", jpeg_base64=base64.b64encode(jpeg).decode())
 
 
 @tool

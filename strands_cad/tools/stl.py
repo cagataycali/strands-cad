@@ -254,7 +254,10 @@ def stl_convert(input_file: str, output_file: str) -> dict:
         return err(f"file not found: {src}")
     m = trimesh.load(src, force="mesh")
     out.parent.mkdir(parents=True, exist_ok=True)
-    m.export(out)
+    try:
+        m.export(out)
+    except BaseException as e:  # trimesh raises ImportError for missing format deps
+        return err(f"export to {out.suffix} failed: {e}")
     return ok(f"converted {src.suffix} → {out.suffix}: {out}", path=str(out))
 
 
@@ -396,14 +399,12 @@ def mesh_boolean(
             return err(f"file not found: {p}")
     a = trimesh.load(stl_a, force="mesh")
     b = trimesh.load(stl_b, force="mesh")
-    if op == "union":
-        r = a.union(b)
-    elif op == "difference":
-        r = a.difference(b)
-    elif op == "intersection":
-        r = a.intersection(b)
-    else:
+    if op not in ("union", "difference", "intersection"):
         return err(f"unknown op '{op}'. Use union|difference|intersection.")
+    try:
+        r = getattr(a, op)(b)
+    except BaseException as e:  # trimesh raises ImportError when no boolean backend
+        return err(f"{op} failed: {e}. Try: pip install manifold3d")
     out = Path(output_stl).resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
     r.export(out)
