@@ -298,7 +298,12 @@ def slice_bambu(
     if not src.exists():
         return err(f"3mf not found: {src}")
     out.parent.mkdir(parents=True, exist_ok=True)
-    args = [cli, "--slice", "0", "--outputdir", str(out.parent)]
+    # Export a REAL .3mf project bundle alongside the gcode (parity with the
+    # docker backend) — firmware requires the full bundle for LAN prints;
+    # bare/hand-wrapped gcode → error 0x05004037/46 "file invalid".
+    out_3mf_name = out.stem + ".3mf"
+    args = [cli, "--slice", "0", "--export-3mf", out_3mf_name,
+            "--outputdir", str(out.parent)]
     # Use official Bambu Studio machine/process/filament presets.
     # The CLI requires real preset JSONs (with type/name/from fields) —
     # ad-hoc key/value JSON files are rejected ("from unsupported").
@@ -343,22 +348,33 @@ def slice_bambu(
     except subprocess.TimeoutExpired:
         return err("bambu-studio slicing timed out")
     log = (r.stdout + r.stderr)[-2000:]
-    # Bambu writes gcode/3mf into outputdir; we return the newest matching file
-    candidates = sorted(out.parent.glob("*.gcode"), key=lambda p: p.stat().st_mtime, reverse=True)
-    candidates += sorted(out.parent.glob("*.3mf"), key=lambda p: p.stat().st_mtime, reverse=True)
-    result = str(candidates[0]) if candidates else ""
     if r.returncode != 0:
         return err(f"slice failed (rc={r.returncode}): {log}")
-    # The slicer names its output itself (e.g. plate_1.gcode) — mirror the
-    # newest artifact to the caller's requested path so downstream tools can
-    # rely on `output_gcode` existing (parity with the docker backend).
-    if result and Path(result).suffix == out.suffix and str(out) != result:
+
+    # Both Bambu Studio and OrcaSlicer CLIs leave printer_model_id empty in
+    # the exported 3mf — patch in the firmware model code (X2D=N6 …).
+    out_3mf = out.parent / out_3mf_name
+    if out_3mf.exists():
         try:
-            shutil.copy(result, out)
-            result = str(out)
+            _inject_model_code(out_3mf, printer_model)
+        except Exception as e:  # non-fatal; gcode still usable
+            log += f"\n(model-code inject skipped: {e})"
+
+    # The slicer names the bare gcode itself (e.g. plate_1.gcode) — mirror the
+    # newest one to the caller's requested path so downstream tools (estimate,
+    # preview) can rely on it (parity with the docker backend).
+    gcode_out = out if out.suffix == ".gcode" else out.with_suffix(".gcode")
+    gcode_cands = sorted(out.parent.glob("*.gcode"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if gcode_cands and str(gcode_cands[0]) != str(gcode_out):
+        try:
+            shutil.copy(str(gcode_cands[0]), str(gcode_out))
         except Exception:
             pass
-    return ok(f"sliced → {result}", path=result, log=log)
+
+    result = str(out_3mf) if out_3mf.exists() else (str(gcode_cands[0]) if gcode_cands else "")
+    return ok(f"sliced ({Path(cli).name}) → {result}",
+              path=result, gcode=str(gcode_out) if gcode_out.exists() else "",
+              log=log, slicer=Path(cli).name)
 
 
 @tool
@@ -388,8 +404,9 @@ def slice_estimate(gcode_file: str) -> dict:
         s = line.strip()
         if not s.startswith(";"):
             continue
-        # PrusaSlicer / Bambu style
-        m = re.search(r"estimated printing time.*?=\s*([0-9dhms\s]+)", s, re.I)
+        # PrusaSlicer "estimated printing time ... = 1h 2m 3s" /
+        # Bambu Studio & Orca header "total estimated time: 7m 44s"
+        m = re.search(r"(?:estimated printing time.*?=|total estimated time:)\s*([0-9dhms\s]+)", s, re.I)
         if m:
             hms = m.group(1)
             hours = re.search(r"(\d+)\s*h", hms)
