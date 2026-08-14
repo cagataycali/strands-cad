@@ -126,9 +126,26 @@ def bambu_send(file_path: str, plate_index: int = 1, use_ams: bool = True) -> di
     if not src.exists():
         return err(f"file not found: {src}")
 
-    # Bambu supports FTP over TLS for file upload (port 990). For simplicity,
-    # we require the file to already exist on the printer's SD, or use the
-    # Bambu Handy app to upload. Here we send the "start print" command.
+    # BUSY GUARD — must run BEFORE any dispatch. Verified live on a real X2D
+    # (2026-08-14): the firmware does NOT refuse a project_file while printing,
+    # it silently REPLACES the running job (a print at 10% was killed by a
+    # second send). Refusing here is the only protection the running job has.
+    with _LOCK:
+        busy = dict(_CONN.get("last_state") or {})
+    if busy.get("gcode_state") in ("RUNNING", "PREPARE", "SLICING", "PAUSE"):
+        return err(f"printer is busy: '{busy.get('subtask_name')}' is "
+                   f"{busy.get('gcode_state')} at {busy.get('mc_percent', '?')}% — "
+                   "sending now would REPLACE it. Stop it first (bambu_control) "
+                   "or wait for it to finish.")
+
+    # UPLOAD FIRST — the docstring promises "upload and start", so do both.
+    # (Live failure mode on a real X2D, 2026-08-14: skipping the upload and
+    # sending project_file for a file not on the SD card latches
+    # print_error 0x05004002 and gcode_state=FAILED until cleared.)
+    up = bambu_upload(str(src))
+    if up.get("status") != "success":
+        return err(f"upload before print failed: {up.get('content')}")
+
     is_gcode = src.suffix.lower() == ".gcode"
     # Bambu firmware: a 3MF *project* references its internal
     # Metadata/plate_N.gcode; a bare .gcode on SD must reference the file
@@ -147,6 +164,12 @@ def bambu_send(file_path: str, plate_index: int = 1, use_ams: bool = True) -> di
                    json.dumps({"print": {"sequence_id": str(int(time.time())),
                                           "command": "clean_print_error"}}))
     time.sleep(1.0)
+    # Snapshot pre-dispatch state so stale values can't fool the verifier below
+    # (e.g. a print already RUNNING, or a latched print_error not yet re-pushed).
+    with _LOCK:
+        pre = dict(_CONN.get("last_state") or {})
+    pre_err = int(pre.get("print_error") or 0)
+    subtask = src.stem.removesuffix(".gcode")  # foo.gcode.3mf → "foo"
     payload = {
         "print": {
             "sequence_id": str(int(time.time())),
@@ -154,6 +177,7 @@ def bambu_send(file_path: str, plate_index: int = 1, use_ams: bool = True) -> di
             "param": param,
             "file": src.name,
             "url": f"ftp:///{src.name}",
+            "subtask_name": subtask,
             "bed_type": "textured_plate",
             "bed_leveling": True,
             "flow_cali": True,
@@ -166,9 +190,33 @@ def bambu_send(file_path: str, plate_index: int = 1, use_ams: bool = True) -> di
         }
     }
     client.publish(f"device/{serial}/request", json.dumps(payload))
-    return ok(f"job dispatched: {src.name} (plate {plate_index})",
+
+    # VERIFY — don't claim success on a fire-and-forget publish. Poll the
+    # cached MQTT report: RUNNING/PREPARE = started; a fresh print_error or
+    # FAILED = the firmware rejected the job (report the code in hex, it's
+    # what Bambu's wiki indexes on).
+    deadline = time.time() + 20.0
+    while time.time() < deadline:
+        time.sleep(1.0)
+        with _LOCK:
+            state = dict(_CONN.get("last_state") or {})
+        gs = state.get("gcode_state")
+        pe = int(state.get("print_error") or 0)
+        if pe and pe != pre_err:
+            return err(f"printer rejected job: print_error={pe} (0x{pe:08X}), "
+                       f"gcode_state={gs}")
+        if gs in ("RUNNING", "PREPARE", "SLICING") \
+                and state.get("subtask_name") == subtask:
+            return ok(f"print started: {src.name} (plate {plate_index}, state {gs})",
+                      job={"file": src.name, "plate": plate_index, "use_ams": use_ams})
+    gs = state.get("gcode_state")
+    if gs in ("RUNNING", "PREPARE") and state.get("subtask_name") != subtask:
+        return err(f"printer is busy with '{state.get('subtask_name')}' "
+                   f"(state {gs}) — this job was not started")
+    return ok(f"job dispatched: {src.name} (plate {plate_index}) — state still "
+              f"'{gs}' after 20s; poll bambu_status()",
               job={"file": src.name, "plate": plate_index, "use_ams": use_ams},
-              note="Use bambu_upload() first if the file is not yet on the SD card.")
+              verified=False)
 
 
 @tool
