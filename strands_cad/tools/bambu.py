@@ -126,26 +126,97 @@ def bambu_send(file_path: str, plate_index: int = 1, use_ams: bool = True) -> di
     if not src.exists():
         return err(f"file not found: {src}")
 
-    # Bambu supports FTP over TLS for file upload (port 990). For simplicity,
-    # we require the file to already exist on the printer's SD, or use the
-    # Bambu Handy app to upload. Here we send the "start print" command.
+    # BUSY GUARD — must run BEFORE any dispatch. Verified live on a real X2D
+    # (2026-08-14): the firmware does NOT refuse a project_file while printing,
+    # it silently REPLACES the running job (a print at 10% was killed by a
+    # second send). Refusing here is the only protection the running job has.
+    with _LOCK:
+        busy = dict(_CONN.get("last_state") or {})
+    if busy.get("gcode_state") in ("RUNNING", "PREPARE", "SLICING", "PAUSE"):
+        return err(f"printer is busy: '{busy.get('subtask_name')}' is "
+                   f"{busy.get('gcode_state')} at {busy.get('mc_percent', '?')}% — "
+                   "sending now would REPLACE it. Stop it first (bambu_control) "
+                   "or wait for it to finish.")
+
+    # UPLOAD FIRST — the docstring promises "upload and start", so do both.
+    # (Live failure mode on a real X2D, 2026-08-14: skipping the upload and
+    # sending project_file for a file not on the SD card latches
+    # print_error 0x05004002 and gcode_state=FAILED until cleared.)
+    up = bambu_upload(str(src))
+    if up.get("status") != "success":
+        return err(f"upload before print failed: {up.get('content')}")
+
+    is_gcode = src.suffix.lower() == ".gcode"
+    # Bambu firmware: a 3MF *project* references its internal
+    # Metadata/plate_N.gcode; a bare .gcode on SD must reference the file
+    # itself (Metadata/plate_N.gcode does NOT exist inside a plain gcode →
+    # the printer silently rejects the job). AMS mapping only exists inside a
+    # 3MF, so use_ams is meaningful only for 3MF projects.
+    param = src.name if is_gcode else f"Metadata/plate_{plate_index}.gcode"
+    # Bambu firmware validation (verified against real X2D + BambuTools/bambulabs_api):
+    #  • url MUST be "ftp:///<name>" (SD root). "file:///mnt/sdcard/..." → error
+    #    0x05004002 "Unsupported print file path or name".
+    #  • the printed file should be a REAL OrcaSlicer .3mf project bundle whose
+    #    slice_info.config carries the printer *model code* (e.g. X2D=N6). A bare
+    #    gcode or a hand-wrapped 3mf → 0x05004037/46 "file invalid / incompatible".
+    #  • send both "file" and "url"; clear any latched error first.
+    client.publish(f"device/{serial}/request",
+                   json.dumps({"print": {"sequence_id": str(int(time.time())),
+                                          "command": "clean_print_error"}}))
+    time.sleep(1.0)
+    # Snapshot pre-dispatch state so stale values can't fool the verifier below
+    # (e.g. a print already RUNNING, or a latched print_error not yet re-pushed).
+    with _LOCK:
+        pre = dict(_CONN.get("last_state") or {})
+    pre_err = int(pre.get("print_error") or 0)
+    subtask = src.stem.removesuffix(".gcode")  # foo.gcode.3mf → "foo"
     payload = {
         "print": {
             "sequence_id": str(int(time.time())),
             "command": "project_file",
-            "param": f"Metadata/plate_{plate_index}.gcode",
-            "subtask_name": src.stem,
-            "url": f"file:///mnt/sdcard/{src.name}",
-            "bed_type": "auto",
-            "timelapse": True,
-            "flow_cali": False,
+            "param": param,
+            "file": src.name,
+            "url": f"ftp:///{src.name}",
+            "subtask_name": subtask,
+            "bed_type": "textured_plate",
+            "bed_leveling": True,
+            "flow_cali": True,
+            "vibration_cali": True,
+            "layer_inspect": True,
+            "timelapse": False,
             "use_ams": use_ams,
+            "ams_mapping": [0],
+            "skip_objects": None,
         }
     }
     client.publish(f"device/{serial}/request", json.dumps(payload))
-    return ok(f"job dispatched: {src.name} (plate {plate_index})",
+
+    # VERIFY — don't claim success on a fire-and-forget publish. Poll the
+    # cached MQTT report: RUNNING/PREPARE = started; a fresh print_error or
+    # FAILED = the firmware rejected the job (report the code in hex, it's
+    # what Bambu's wiki indexes on).
+    deadline = time.time() + 20.0
+    while time.time() < deadline:
+        time.sleep(1.0)
+        with _LOCK:
+            state = dict(_CONN.get("last_state") or {})
+        gs = state.get("gcode_state")
+        pe = int(state.get("print_error") or 0)
+        if pe and pe != pre_err:
+            return err(f"printer rejected job: print_error={pe} (0x{pe:08X}), "
+                       f"gcode_state={gs}")
+        if gs in ("RUNNING", "PREPARE", "SLICING") \
+                and state.get("subtask_name") == subtask:
+            return ok(f"print started: {src.name} (plate {plate_index}, state {gs})",
+                      job={"file": src.name, "plate": plate_index, "use_ams": use_ams})
+    gs = state.get("gcode_state")
+    if gs in ("RUNNING", "PREPARE") and state.get("subtask_name") != subtask:
+        return err(f"printer is busy with '{state.get('subtask_name')}' "
+                   f"(state {gs}) — this job was not started")
+    return ok(f"job dispatched: {src.name} (plate {plate_index}) — state still "
+              f"'{gs}' after 20s; poll bambu_status()",
               job={"file": src.name, "plate": plate_index, "use_ams": use_ams},
-              note="Use bambu_upload() first if the file is not yet on the SD card.")
+              verified=False)
 
 
 @tool
@@ -172,10 +243,24 @@ def bambu_upload(file_path: str, remote_name: str = "") -> dict:
         return err(f"file not found: {src}")
     name = remote_name or src.name
 
+    # Pre-flight: Bambu's FTPS server chroots into the SD card mount. If no card
+    # is inserted (sdcard=False in MQTT report), EVERY STOR fails with
+    # "553 Could not create file". Surface this as an actionable error.
+    with _LOCK:
+        last = _CONN.get("last_state") or {}
+    sd = last.get("sdcard")
+    if sd is False:
+        return err("553 would fail: printer reports NO SD/microSD card inserted "
+                   "(sdcard=False). Insert a FAT32 microSD/USB into the printer "
+                   "to enable file upload + LAN printing.")
+
     import ftplib
 
     class ImplicitFTPS(ftplib.FTP_TLS):
-        """FTP_TLS subclass for implicit TLS (Bambu uses port 990)."""
+        """FTP_TLS for implicit TLS (Bambu port 990) with data-channel TLS
+        session reuse — Bambu\'s server REQUIRES the data connection to reuse
+        the control connection\'s TLS session, otherwise STOR fails with
+        "553 Could not create file". Stock ftplib does not do this."""
         def connect(self, host="", port=0, timeout=-999, source_address=None):
             import socket as _socket
             if host:
@@ -191,12 +276,21 @@ def bambu_upload(file_path: str, remote_name: str = "") -> dict:
             self.welcome = self.getresp()
             return self.welcome
 
+        def ntransfercmd(self, cmd, rest=None):
+            # Reuse the control connection\'s TLS session for the data channel.
+            conn, size = ftplib.FTP.ntransfercmd(self, cmd, rest)
+            if self._prot_p:
+                session = self.sock.session
+                conn = self.context.wrap_socket(
+                    conn, server_hostname=self.host, session=session)
+            return conn, size
+
     try:
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         ftps = ImplicitFTPS(context=ctx)
-        ftps.connect(ip, 990, timeout=15)
+        ftps.connect(ip, 990, timeout=45)
         ftps.login("bblp", access)
         ftps.prot_p()
         with open(src, "rb") as f:
@@ -234,6 +328,9 @@ def bambu_status() -> dict:
         layer=s.get("layer_num"),
         total_layers=s.get("total_layer_num"),
         remaining_min=s.get("mc_remaining_time"),
+        sdcard=s.get("sdcard"),
+        subtask_name=s.get("subtask_name"),
+        nozzle_count=(2 if s.get("2D") is not None else 1),
         temps={
             "nozzle": s.get("nozzle_temper"),
             "nozzle_target": s.get("nozzle_target_temper"),
@@ -264,12 +361,86 @@ def bambu_control(action: str) -> dict:
     return ok(f"sent {action}", action=action)
 
 
+def _camera_rtsps_frame(ip: str, access: str, timeout: int = 25) -> bytes | None:
+    """Grab one JPEG frame from the RTSPS liveview (X1/X2/H2 series, port 322).
+
+    Verified against a real X-series printer: the port-6000 JPEG protocol is
+    P1/A1-only — X-series replies 0xffffffff and closes, so ffmpeg + RTSPS is
+    the working path here.
+    """
+    import shutil as _sh
+    import subprocess as _sp
+    import tempfile as _tf
+    import urllib.parse as _up
+    ffmpeg = _sh.which("ffmpeg")
+    if not ffmpeg:
+        try:
+            import imageio_ffmpeg  # type: ignore
+            ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        except Exception:
+            return None
+    url = f"rtsps://bblp:{_up.quote(access, safe='')}@{ip}:322/streaming/live/1"
+    tmp = Path(_tf.mkstemp(suffix=".jpg")[1])
+    try:
+        r = _sp.run([ffmpeg, "-y", "-loglevel", "error", "-rtsp_transport", "tcp",
+                     "-i", url, "-frames:v", "1", str(tmp)],
+                    capture_output=True, timeout=timeout)
+        if r.returncode == 0 and tmp.exists() and tmp.stat().st_size > 0:
+            return tmp.read_bytes()
+        return None
+    except Exception:
+        return None
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _camera_p1_frame(ip: str, access: str, timeout: int = 10) -> bytes | None:
+    """Grab one JPEG frame from the port-6000 TLS stream (P1/A1 series).
+
+    Protocol: send a 0x40-byte auth packet (magic, "bblp", access code), then
+    read 16-byte headers + JPEG payloads. An 8-byte 0xffffffff payload means
+    auth rejected / unsupported model (e.g. X-series → use RTSPS instead).
+    """
+    import socket
+    import struct
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        raw = socket.create_connection((ip, 6000), timeout=timeout)
+        s = ctx.wrap_socket(raw, server_hostname=ip)
+        s.settimeout(timeout)
+        auth = struct.pack("<IIII", 0x40, 0x3000, 0, 0)
+        auth += b"bblp".ljust(32, b"\0") + access.encode().ljust(32, b"\0")
+        s.write(auth)
+
+        def read_n(n: int) -> bytes:
+            buf = b""
+            while len(buf) < n:
+                c = s.recv(n - len(buf))
+                if not c:
+                    raise EOFError(f"stream closed at {len(buf)}/{n} bytes")
+                buf += c
+            return buf
+
+        for _ in range(4):  # first packets may be control frames
+            plen = struct.unpack("<I", read_n(16)[:4])[0]
+            payload = read_n(plen) if plen else b""
+            if payload[:2] == b"\xff\xd8":
+                s.close()
+                return payload
+        s.close()
+        return None
+    except Exception:
+        return None
+
+
 @tool
 def bambu_camera(save_path: str = "") -> dict:
-    """Fetch a JPEG snapshot from the printer's chamber camera.
+    """Fetch a JPEG snapshot from the printer's chamber camera (LAN mode).
 
-    Requires the printer's chamber camera to be enabled in LAN mode.
-    Uses the printer's authenticated JPEG stream (port 6000 rtsp or 8080 http).
+    Tries the RTSPS liveview (X1/X2/H2 series, port 322, via ffmpeg) first,
+    then the port-6000 TLS JPEG stream (P1/A1 series).
 
     Args:
         save_path: Optional path to save the JPEG. If empty, returns base64 in payload.
@@ -280,25 +451,17 @@ def bambu_camera(save_path: str = "") -> dict:
     with _LOCK:
         ip = _CONN["ip"]
         access = _CONN["access_code"]
-    try:
-        import requests  # type: ignore
-    except ImportError:
-        return err("requests required. pip install 'strands-cad[bambu]'")
-    # Bambu exposes: rtsps://bblp:<access>@<ip>:322/streaming/live/1
-    # HTTP snapshot on newer firmware:
-    url = f"http://{ip}:6000/snapshot.jpg"
-    try:
-        r = requests.get(url, timeout=5, auth=("bblp", access))
-        if r.status_code != 200 or not r.content:
-            return err(f"camera returned {r.status_code} (may need RTSP-only firmware)")
-    except Exception as e:
-        return err(f"camera fetch failed: {e}")
+    jpeg = _camera_rtsps_frame(ip, access) or _camera_p1_frame(ip, access)
+    if not jpeg:
+        return err("camera fetch failed: neither RTSPS (port 322, needs ffmpeg — "
+                   "`pip install imageio-ffmpeg`) nor the P1-series port-6000 stream "
+                   "returned a frame. Check LAN-mode liveview is enabled on the printer.")
     if save_path:
         p = Path(save_path).resolve()
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_bytes(r.content)
-        return ok(f"saved snapshot → {p} ({len(r.content)} bytes)", path=str(p))
-    return ok(f"snapshot ({len(r.content)} bytes)", jpeg_base64=base64.b64encode(r.content).decode())
+        p.write_bytes(jpeg)
+        return ok(f"saved snapshot → {p} ({len(jpeg)} bytes)", path=str(p))
+    return ok(f"snapshot ({len(jpeg)} bytes)", jpeg_base64=base64.b64encode(jpeg).decode())
 
 
 @tool

@@ -17,6 +17,23 @@ from strands_cad._common import ok, err
 _SAFE: dict[str, Any] = {}
 
 
+def _script_source(script: str) -> str:
+    """Accept either inline CadQuery source or a PATH to a .py file.
+
+    Live failure mode (2026-08-14): an agent passed a path to a perfectly good
+    script and got "SyntaxError: invalid syntax (<string>, line 1)" — a path is
+    not a program. If the string names an existing file, read it.
+    """
+    s = script.strip()
+    if "\n" not in s and s.endswith(".py"):
+        p = Path(s)
+        if p.is_file():
+            return p.read_text()
+        raise FileNotFoundError(
+            f"script looks like a path but no such file: {s}")
+    return script
+
+
 def _cq_globals() -> dict[str, Any]:
     """Sandbox globals with cadquery + math for expressions."""
     global _SAFE
@@ -78,7 +95,7 @@ result = (cq.Workplane("XY")
         return err(str(e))
     local: dict[str, Any] = {}
     try:
-        exec(textwrap.dedent(script), g, local)
+        exec(textwrap.dedent(_script_source(script)), g, local)
     except Exception as e:
         return err(f"script failed: {type(e).__name__}: {e}")
     obj = local.get("result")
@@ -120,7 +137,7 @@ def cq_render_step(script: str, output_step: str) -> dict:
         return err(str(e))
     local: dict[str, Any] = {}
     try:
-        exec(textwrap.dedent(script), g, local)
+        exec(textwrap.dedent(_script_source(script)), g, local)
     except Exception as e:
         return err(f"script failed: {type(e).__name__}: {e}")
     obj = local.get("result")
@@ -186,7 +203,7 @@ def cq_render_svg(script: str, output_svg: str, view: str = "iso") -> dict:
         return err(str(e))
     local: dict[str, Any] = {}
     try:
-        exec(textwrap.dedent(script), g, local)
+        exec(textwrap.dedent(_script_source(script)), g, local)
     except Exception as e:
         return err(f"script failed: {type(e).__name__}: {e}")
     obj = local.get("result")
