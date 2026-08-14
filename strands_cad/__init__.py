@@ -8,7 +8,7 @@ control, and a WebAuthn-gated live dashboard.
 imported — so a lean `pip install strands-cad` (core only) still gives you a
 usable tool list; installing extras ([neural], [sim], [dashboard]) grows it.
 """
-__version__ = "0.5.2"
+__version__ = "0.5.3"
 
 from strands_cad import tools as _tools
 
