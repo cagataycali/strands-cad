@@ -107,13 +107,20 @@ def _require_conn() -> tuple[Any, str] | None:
 
 
 @tool
-def bambu_send(file_path: str, plate_index: int = 1, use_ams: bool = True) -> dict:
+def bambu_send(file_path: str, plate_index: int = 1, use_ams: bool = True,
+               ams_mapping: list[int] | None = None) -> dict:
     """Upload a sliced 3MF/G-code and start the print job.
 
     Args:
         file_path: Local path to sliced .3mf (with G-code) or .gcode.
         plate_index: Which plate in the 3MF to print (default 1).
         use_ams: If True, use AMS filament mapping from the file.
+        ams_mapping: AMS slot (0-based) for each filament in the sliced file,
+            in filament order. A 2-color plate whose filaments live in AMS
+            slots 1 and 4 (1-based, as the UI shows) needs [0, 3]. Defaults to
+            [0] — correct only for single-filament plates; leaving that default
+            on a multi-color job makes every filament resolve to slot 0 and the
+            whole model prints in one color.
 
     Returns:
         {status, content, job:{file, plate}}
@@ -185,7 +192,7 @@ def bambu_send(file_path: str, plate_index: int = 1, use_ams: bool = True) -> di
             "layer_inspect": True,
             "timelapse": False,
             "use_ams": use_ams,
-            "ams_mapping": [0],
+            "ams_mapping": list(ams_mapping) if ams_mapping else [0],
             "skip_objects": None,
         }
     }

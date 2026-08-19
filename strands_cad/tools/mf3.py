@@ -200,6 +200,7 @@ def mf3_read_metadata(mf3_file: str) -> dict:
 # slicing with a non-Bambu slicer (PrusaSlicer on aarch64), we wrap the sliced
 # gcode into a minimal Bambu-compatible bundle so the firmware accepts it.
 import hashlib as _hashlib
+import re as _re
 
 _GC_CONTENT_TYPES = b'''<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -222,22 +223,60 @@ _GC_MODEL = b'''<?xml version="1.0" encoding="UTF-8"?>
 </model>'''
 
 
+def _gcode_filaments(gdata: bytes) -> list[dict]:
+    """Read per-filament info out of a sliced Bambu/Orca G-code header.
+
+    Returns [{id, type, color, used_g}] in slicer filament order (1-based id).
+    Multi-color jobs need these declared in slice_info.config — without them
+    the firmware has no filament list to map AMS slots onto and falls back to
+    a single (first) filament, printing the whole plate in one color.
+    """
+    head = gdata[:400_000].decode("utf-8", "ignore")
+
+    def _grab(key: str) -> str:
+        m = _re.search(rf"^; {key} = (.*)$", head, _re.M)
+        return m.group(1).strip() if m else ""
+
+    colors = [c for c in _grab("filament_colour").split(";") if c]
+    types = [t for t in _grab("filament_type").split(";") if t]
+    used = [u.strip() for u in _grab(r"filament used \[g\]").split(",") if u.strip()]
+    out = []
+    for i, color in enumerate(colors):
+        out.append({
+            "id": i + 1,
+            "type": types[i] if i < len(types) else "PLA",
+            "color": color if color.startswith("#") else f"#{color}",
+            "used_g": used[i] if i < len(used) else "0",
+        })
+    return out
+
+
 def bambu_gcode_3mf(gcode_path: str, output_3mf: str = "", plate_index: int = 1,
-                    printer_model: str = "Bambu Lab X2D") -> dict:
+                    printer_model: str = "Bambu Lab X2D",
+                    model_3mf: str = "") -> dict:
     """Wrap a sliced .gcode into a Bambu-firmware-compatible 3MF project bundle.
 
     The firmware's project_file command loads Metadata/plate_{N}.gcode from
-    inside the 3MF. We build that structure + the md5 sidecar + a minimal
+    inside the 3MF. We build that structure + the md5 sidecar + a
     slice_info.config so the printer accepts and runs the job.
+
+    For multi-color plates the <filament> entries matter: they are what the
+    firmware maps AMS slots onto via the print command's ams_mapping. Omit
+    them and a 2-color job prints in a single color.
 
     Args:
         gcode_path: Path to sliced .gcode.
         output_3mf: Output bundle path (defaults to <gcode>.gcode.3mf).
         plate_index: Plate number (default 1).
         printer_model: Printer model string for slice_info.
+        model_3mf: Source .3mf to copy real geometry (and model_settings /
+            project_settings) from. STRONGLY recommended: without it the bundle
+            carries an EMPTY model stub, which the firmware tolerates (it only
+            reads the plate G-code) but Bambu Studio / OrcaSlicer CRASH on when
+            opening the file as a project — a plate with zero objects.
 
     Returns:
-        {status, content, path, size_kb}
+        {status, content, path, size_kb, filaments}
     """
     src = Path(gcode_path).resolve()
     if not src.exists():
@@ -245,10 +284,36 @@ def bambu_gcode_3mf(gcode_path: str, output_3mf: str = "", plate_index: int = 1,
     out = Path(output_3mf).resolve() if output_3mf else src.with_suffix(".gcode.3mf")
     out.parent.mkdir(parents=True, exist_ok=True)
 
+    # Pull real geometry + settings from the source plate so the bundle opens
+    # cleanly in a slicer GUI as well as printing on the firmware.
+    model_xml, extra = _GC_MODEL, {}
+    if model_3mf:
+        msrc = Path(model_3mf).resolve()
+        if not msrc.exists():
+            return err(f"model 3mf not found: {msrc}")
+        try:
+            with zipfile.ZipFile(msrc) as mz:
+                names = set(mz.namelist())
+                if "3D/3dmodel.model" not in names:
+                    return err(f"no 3D/3dmodel.model inside {msrc.name}")
+                model_xml = mz.read("3D/3dmodel.model")
+                for n in ("Metadata/model_settings.config",
+                          "Metadata/project_settings.config"):
+                    if n in names:
+                        extra[n] = mz.read(n)
+        except Exception as e:
+            return err(f"failed reading model 3mf: {e}")
+
     gdata = src.read_bytes()
     md5 = _hashlib.md5(gdata).hexdigest()
     plate_gcode = f"Metadata/plate_{plate_index}.gcode"
 
+    filaments = _gcode_filaments(gdata)
+    fil_xml = "".join(
+        f'    <filament id="{f["id"]}" tray_info_idx="" type="{f["type"]}" '
+        f'color="{f["color"]}" used_g="{f["used_g"]}" used_m="0"/>\n'
+        for f in filaments
+    )
     slice_info = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<config>\n'
@@ -258,6 +323,7 @@ def bambu_gcode_3mf(gcode_path: str, output_3mf: str = "", plate_index: int = 1,
         f'    <metadata key="index" value="{plate_index}"/>\n'
         f'    <metadata key="printer_model_id" value="{printer_model}"/>\n'
         f'    <metadata key="gcode_file" value="{plate_gcode}"/>\n'
+        f'{fil_xml}'
         f'  </plate>\n'
         '</config>\n'
     ).encode()
@@ -266,13 +332,16 @@ def bambu_gcode_3mf(gcode_path: str, output_3mf: str = "", plate_index: int = 1,
         with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
             z.writestr("[Content_Types].xml", _GC_CONTENT_TYPES)
             z.writestr("_rels/.rels", _GC_RELS)
-            z.writestr("3D/3dmodel.model", _GC_MODEL)
+            z.writestr("3D/3dmodel.model", model_xml)
             z.writestr(plate_gcode, gdata)
             z.writestr(f"Metadata/plate_{plate_index}.gcode.md5", md5.encode())
             z.writestr("Metadata/slice_info.config", slice_info)
+            for n, data in extra.items():
+                z.writestr(n, data)
     except Exception as e:
         return err(f"failed to build gcode 3MF: {e}")
 
-    return ok(f"wrapped gcode → {out.name} (Bambu project bundle)",
+    return ok(f"wrapped gcode → {out.name} (Bambu project bundle, "
+              f"{len(filaments)} filament(s))",
               path=str(out), size_kb=round(out.stat().st_size / 1024, 1),
-              plate_gcode=plate_gcode, md5=md5)
+              plate_gcode=plate_gcode, md5=md5, filaments=filaments)
