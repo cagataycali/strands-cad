@@ -1970,14 +1970,14 @@
 Bambu printer: live 1080p chamber camera, temps / progress / AMS telemetry,
 pause / resume / stop, a 3D build-plate view, and an on-page agent chat — all
 behind WebAuthn so a stranger on your LAN can't start fires or move motors.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;strands-cad[dashboard]&quot;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"strands-cad[dashboard]"</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nv">BAMBU_IP</span><span class="o">=</span><span class="m">192</span>.168.1.164<span class="w"> </span><span class="nv">BAMBU_ACCESS_CODE</span><span class="o">=</span>xxxxxxxx<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>strands-cad-dashboard<span class="w"> </span>--tls<span class="w">          </span><span class="c1"># → https://localhost:8099</span>
 </span></code></pre></div>
 <p>Or let an <strong>agent</strong> spin it up on demand (also exposed over MCP):</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">dashboard_start</span><span class="p">(</span><span class="n">ip</span><span class="o">=</span><span class="s2">&quot;192.168.1.164&quot;</span><span class="p">,</span> <span class="n">access_code</span><span class="o">=</span><span class="s2">&quot;xxxxxxxx&quot;</span><span class="p">,</span> <span class="n">tls</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># → open the URL, tap &quot;Create passkey&quot;, and you&#39;re watching the print.</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">dashboard_start</span><span class="p">(</span><span class="n">ip</span><span class="o">=</span><span class="s2">"192.168.1.164"</span><span class="p">,</span> <span class="n">access_code</span><span class="o">=</span><span class="s2">"xxxxxxxx"</span><span class="p">,</span> <span class="n">tls</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># → open the URL, tap "Create passkey", and you're watching the print.</span>
 </span></code></pre></div>
 <h2 id="control-tools">Control tools<a class="headerlink" href="#control-tools" title="Permanent link">&para;</a></h2>
 <table>

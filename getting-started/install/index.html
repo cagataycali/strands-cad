@@ -2006,23 +2006,23 @@ works. First try. Every time.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Dashboard</label><label for="__tabbed_1_2">Simulation</label><label for="__tabbed_1_3">Neural</label><label for="__tabbed_1_4">Everything</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<p><div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;strands-cad[dashboard]&quot;</span>
+<p><div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"strands-cad[dashboard]"</span>
 </span></code></pre></div>
 🖥️ WebAuthn-gated live printer dashboard + RTSPS chamber camera
 (FastAPI + passkeys + bundled ffmpeg).</p>
 </div>
 <div class="tabbed-block">
-<p><div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;strands-cad[sim]&quot;</span>
+<p><div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"strands-cad[sim]"</span>
 </span></code></pre></div>
 🦿 MuJoCo physics — <code>sim_*</code> tools for robot-prop validation.</p>
 </div>
 <div class="tabbed-block">
-<p><div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;strands-cad[neural]&quot;</span>
+<p><div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"strands-cad[neural]"</span>
 </span></code></pre></div>
 🧠 torch/torchvision — required for shap-e text/image → 3D.</p>
 </div>
 <div class="tabbed-block">
-<p><div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;strands-cad[all]&quot;</span>
+<p><div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"strands-cad[all]"</span>
 </span></code></pre></div>
 neural + sim + dashboard in one shot.</p>
 </div>
@@ -2074,7 +2074,7 @@ numba) then satisfies its <em>real</em> runtime deps — so it installs cleanly 
 helper. See <a href="../../pipeline/slice/">Plate → Slice</a> for details.</p>
 </div>
 <h2 id="verify-the-install">Verify the install<a class="headerlink" href="#verify-the-install" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;from strands_cad.tools import __all__; print(len(__all__), &#39;tools loaded&#39;)&quot;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">"from strands_cad.tools import __all__; print(len(__all__), 'tools loaded')"</span>
 </span></code></pre></div>
 <p>You should see <strong>≥ 50 tools</strong> with core only, growing as you add extras.</p>
 <p>Next: <a href="../quickstart/">Quickstart →</a></p>

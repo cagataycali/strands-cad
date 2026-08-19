@@ -2012,28 +2012,28 @@ you want exact dimensions and <code>-D</code> override knobs.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">strands_cad</span><span class="w"> </span><span class="kn">import</span> <span class="n">scad_render_stl</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">scad_render_stl</span><span class="p">(</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">source</span><span class="o">=</span><span class="s1">&#39;&#39;&#39;</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">source</span><span class="o">=</span><span class="s1">'''</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="s1">    difference() {</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="s1">      cube([60, 40, 6], center=true);</span>
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="s1">      cylinder(h=20, r=10, center=true);</span>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="s1">    }</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="s1">    &#39;&#39;&#39;</span><span class="p">,</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">output_stl</span><span class="o">=</span><span class="s2">&quot;plate.stl&quot;</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="s1">    '''</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">output_stl</span><span class="o">=</span><span class="s2">"plate.stl"</span><span class="p">,</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="parametric-families-with-defines">Parametric families with <code>defines</code><a class="headerlink" href="#parametric-families-with-defines" title="Permanent link">&para;</a></h2>
 <p>The superpower of the SCAD path — one script, many sizes:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">40</span><span class="p">,</span> <span class="mi">50</span><span class="p">,</span> <span class="mi">60</span><span class="p">):</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">scad_render_stl</span><span class="p">(</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>        <span class="n">source</span><span class="o">=</span><span class="s2">&quot;cube([W, 30, 5]);&quot;</span><span class="p">,</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>        <span class="n">defines</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;W&quot;</span><span class="p">:</span> <span class="n">w</span><span class="p">},</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>        <span class="n">output_stl</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;rail_</span><span class="si">{</span><span class="n">w</span><span class="si">}</span><span class="s2">.stl&quot;</span><span class="p">,</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>        <span class="n">source</span><span class="o">=</span><span class="s2">"cube([W, 30, 5]);"</span><span class="p">,</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>        <span class="n">defines</span><span class="o">=</span><span class="p">{</span><span class="s2">"W"</span><span class="p">:</span> <span class="n">w</span><span class="p">},</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>        <span class="n">output_stl</span><span class="o">=</span><span class="sa">f</span><span class="s2">"rail_</span><span class="si">{</span><span class="n">w</span><span class="si">}</span><span class="s2">.stl"</span><span class="p">,</span>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="p">)</span>
 </span></code></pre></div>
 <h2 id="let-the-agent-see-it">Let the agent <em>see</em> it<a class="headerlink" href="#let-the-agent-see-it" title="Permanent link">&para;</a></h2>
 <p><code>scad_view</code> / <code>scad_turntable</code> return actual rendered pixels so a vision-capable
 agent can inspect its own design before committing to a print:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">scad_turntable</span><span class="p">(</span><span class="n">source</span><span class="o">=</span><span class="s2">&quot;...&quot;</span><span class="p">,</span> <span class="n">frames</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="s2">&quot;turntable/&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">scad_turntable</span><span class="p">(</span><span class="n">source</span><span class="o">=</span><span class="s2">"..."</span><span class="p">,</span> <span class="n">frames</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">output_dir</span><span class="o">=</span><span class="s2">"turntable/"</span><span class="p">)</span>
 </span></code></pre></div>
 <pre class="mermaid"><code>flowchart LR
     SRC[SCAD source] --&gt;|scad_validate| OK{valid?}

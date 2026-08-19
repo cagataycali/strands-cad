@@ -2027,44 +2027,44 @@ convention.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Calibration cube</label><label for="__tabbed_1_2">Mounting bracket</label><label for="__tabbed_1_3">T-block (Push-T)</label><label for="__tabbed_1_4">Peg-in-hole board</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<p><div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">cq_render_stl</span><span class="p">(</span><span class="n">script</span><span class="o">=</span><span class="s1">&#39;&#39;&#39;</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="s1">result = cq.Workplane(&quot;XY&quot;).box(20,20,20).edges().chamfer(0.8)</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="s1">&#39;&#39;&#39;</span><span class="p">,</span> <span class="n">output_stl</span><span class="o">=</span><span class="s2">&quot;cube.stl&quot;</span><span class="p">)</span>
+<p><div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">cq_render_stl</span><span class="p">(</span><span class="n">script</span><span class="o">=</span><span class="s1">'''</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="s1">result = cq.Workplane("XY").box(20,20,20).edges().chamfer(0.8)</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="s1">'''</span><span class="p">,</span> <span class="n">output_stl</span><span class="o">=</span><span class="s2">"cube.stl"</span><span class="p">)</span>
 </span></code></pre></div>
 <em>2.2 KB STL in 0.01s.</em></p>
 </div>
 <div class="tabbed-block">
-<p><div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">cq_render_stl</span><span class="p">(</span><span class="n">script</span><span class="o">=</span><span class="s1">&#39;&#39;&#39;</span>
+<p><div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">cq_render_stl</span><span class="p">(</span><span class="n">script</span><span class="o">=</span><span class="s1">'''</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="s1">result = (</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="s1">    cq.Workplane(&quot;XY&quot;).box(60, 40, 6)</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="s1">    .edges(&quot;|Z&quot;).fillet(6)</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="s1">    .faces(&quot;&gt;Z&quot;).workplane()</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="s1">    cq.Workplane("XY").box(60, 40, 6)</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="s1">    .edges("|Z").fillet(6)</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="s1">    .faces("&gt;Z").workplane()</span>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="s1">    .rect(46, 26, forConstruction=True).vertices().hole(4.2)  # M4 × 4</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="s1">    .faces(&quot;&gt;Z&quot;).workplane().hole(20)                         # center bore</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="s1">    .faces("&gt;Z").workplane().hole(20)                         # center bore</span>
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="s1">)</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="s1">&#39;&#39;&#39;</span><span class="p">,</span> <span class="n">output_stl</span><span class="o">=</span><span class="s2">&quot;bracket.stl&quot;</span><span class="p">)</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="s1">'''</span><span class="p">,</span> <span class="n">output_stl</span><span class="o">=</span><span class="s2">"bracket.stl"</span><span class="p">)</span>
 </span></code></pre></div>
 <em>150 KB STL, 0% overhangs, fits X1C bed.</em></p>
 </div>
 <div class="tabbed-block">
-<p><div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">cq_render_stl</span><span class="p">(</span><span class="n">script</span><span class="o">=</span><span class="s1">&#39;&#39;&#39;</span>
+<p><div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">cq_render_stl</span><span class="p">(</span><span class="n">script</span><span class="o">=</span><span class="s1">'''</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="s1">result = (</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="s1">    cq.Workplane(&quot;XY&quot;).box(80, 20, 15)</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="s1">    .union(cq.Workplane(&quot;XY&quot;).center(0, -30).box(20, 40, 15))</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="s1">    .edges(&quot;|Z&quot;).fillet(2)</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="s1">    cq.Workplane("XY").box(80, 20, 15)</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="s1">    .union(cq.Workplane("XY").center(0, -30).box(20, 40, 15))</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="s1">    .edges("|Z").fillet(2)</span>
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="s1">)</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="s1">&#39;&#39;&#39;</span><span class="p">,</span> <span class="n">output_stl</span><span class="o">=</span><span class="s2">&quot;t_block.stl&quot;</span><span class="p">)</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="s1">'''</span><span class="p">,</span> <span class="n">output_stl</span><span class="o">=</span><span class="s2">"t_block.stl"</span><span class="p">)</span>
 </span></code></pre></div>
 <em>51 KB STL, 18.05 g PLA.</em></p>
 </div>
 <div class="tabbed-block">
-<p><div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">cq_render_stl</span><span class="p">(</span><span class="n">script</span><span class="o">=</span><span class="s1">&#39;&#39;&#39;</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="s1">board = cq.Workplane(&quot;XY&quot;).box(120, 50, 12).edges(&quot;|Z&quot;).fillet(4)</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="s1">result = (board.faces(&quot;&gt;Z&quot;).workplane()</span>
+<p><div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">cq_render_stl</span><span class="p">(</span><span class="n">script</span><span class="o">=</span><span class="s1">'''</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="s1">board = cq.Workplane("XY").box(120, 50, 12).edges("|Z").fillet(4)</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="s1">result = (board.faces("&gt;Z").workplane()</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="s1">    .pushPoints([(-40, 0)]).hole(10.4)</span>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="s1">    .pushPoints([(0, 0)]).hole(15.4)</span>
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="s1">    .pushPoints([(40, 0)]).hole(20.4))</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="s1">&#39;&#39;&#39;</span><span class="p">,</span> <span class="n">output_stl</span><span class="o">=</span><span class="s2">&quot;peg_board.stl&quot;</span><span class="p">)</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="s1">'''</span><span class="p">,</span> <span class="n">output_stl</span><span class="o">=</span><span class="s2">"peg_board.stl"</span><span class="p">)</span>
 </span></code></pre></div>
 <em>100 KB STL — grasping/insertion training.</em></p>
 </div>
@@ -2072,16 +2072,16 @@ convention.</p>
 </div>
 <h2 id="lossless-step-for-downstream-cadcnc">Lossless STEP for downstream CAD/CNC<a class="headerlink" href="#lossless-step-for-downstream-cadcnc" title="Permanent link">&para;</a></h2>
 <p>Same script, engineering-grade output:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">cq_render_step</span><span class="p">(</span><span class="n">script</span><span class="o">=</span><span class="s2">&quot;result = cq.Workplane(&#39;XY&#39;).box(30,30,30)&quot;</span><span class="p">,</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>               <span class="n">output_step</span><span class="o">=</span><span class="s2">&quot;part.step&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">cq_render_step</span><span class="p">(</span><span class="n">script</span><span class="o">=</span><span class="s2">"result = cq.Workplane('XY').box(30,30,30)"</span><span class="p">,</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>               <span class="n">output_step</span><span class="o">=</span><span class="s2">"part.step"</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="importing-step">Importing STEP<a class="headerlink" href="#importing-step" title="Permanent link">&para;</a></h2>
 <p>Bring vendor parts into the pipeline:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">cq_import_step</span><span class="p">(</span><span class="n">input_step</span><span class="o">=</span><span class="s2">&quot;vendor_flange.step&quot;</span><span class="p">,</span> <span class="n">output_stl</span><span class="o">=</span><span class="s2">&quot;flange.stl&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">cq_import_step</span><span class="p">(</span><span class="n">input_step</span><span class="o">=</span><span class="s2">"vendor_flange.step"</span><span class="p">,</span> <span class="n">output_stl</span><span class="o">=</span><span class="s2">"flange.stl"</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="drawings-for-docs">Drawings for docs<a class="headerlink" href="#drawings-for-docs" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">cq_render_svg</span><span class="p">(</span><span class="n">script</span><span class="o">=</span><span class="s2">&quot;result = cq.Workplane(&#39;XY&#39;).box(30,30,30)&quot;</span><span class="p">,</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>              <span class="n">output_svg</span><span class="o">=</span><span class="s2">&quot;drawing.svg&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">cq_render_svg</span><span class="p">(</span><span class="n">script</span><span class="o">=</span><span class="s2">"result = cq.Workplane('XY').box(30,30,30)"</span><span class="p">,</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>              <span class="n">output_svg</span><span class="o">=</span><span class="s2">"drawing.svg"</span><span class="p">)</span>
 </span></code></pre></div>
 <p>Next: <a href="../sdf/">Implicit Math — SDF →</a></p>
 
