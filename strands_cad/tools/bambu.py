@@ -10,6 +10,7 @@ Stateless-ish: a single global connection handle is cached in-process.
 from __future__ import annotations
 import base64
 import json
+import os
 import ssl
 import threading
 import time
@@ -99,7 +100,38 @@ def bambu_connect(ip: str, access_code: str, serial: str) -> dict:
               printer={"ip": ip, "serial": serial})
 
 
+def _env_autoconnect() -> bool:
+    """Connect from BAMBU_IP / BAMBU_ACCESS_CODE / BAMBU_SERIAL env if set.
+
+    Lets every bambu tool work without an explicit bambu_connect() call when
+    the process carries printer credentials (MCP server env, dashboard .env),
+    so an agent that only knows "look at the printer" isn't stopped by
+    credentials it was never told.
+    """
+    ip = os.getenv("BAMBU_IP", "")
+    access = os.getenv("BAMBU_ACCESS_CODE", "")
+    serial = os.getenv("BAMBU_SERIAL", "")
+    if not (ip and access and serial):
+        return False
+    try:
+        client = _mqtt_client(ip, access, serial)
+    except Exception:
+        return False
+    with _LOCK:
+        _CONN["client"] = client
+        _CONN["ip"] = ip
+        _CONN["serial"] = serial
+        _CONN["access_code"] = access
+        _CONN["last_state"] = {}
+    time.sleep(1.0)  # let initial pushall arrive
+    return True
+
+
 def _require_conn() -> tuple[Any, str] | None:
+    with _LOCK:
+        connected = _CONN["client"] is not None and _CONN["serial"] is not None
+    if not connected and not _env_autoconnect():
+        return None
     with _LOCK:
         if _CONN["client"] is None or _CONN["serial"] is None:
             return None
@@ -127,7 +159,7 @@ def bambu_send(file_path: str, plate_index: int = 1, use_ams: bool = True,
     """
     conn = _require_conn()
     if not conn:
-        return err("not connected. Call bambu_connect() first.")
+        return err("not connected. Call bambu_connect() first, or set BAMBU_IP, BAMBU_ACCESS_CODE and BAMBU_SERIAL in the environment.")
     client, serial = conn
     src = Path(file_path).resolve()
     if not src.exists():
@@ -241,7 +273,7 @@ def bambu_upload(file_path: str, remote_name: str = "") -> dict:
     """
     conn = _require_conn()
     if not conn:
-        return err("not connected. Call bambu_connect() first.")
+        return err("not connected. Call bambu_connect() first, or set BAMBU_IP, BAMBU_ACCESS_CODE and BAMBU_SERIAL in the environment.")
     with _LOCK:
         ip = _CONN["ip"]
         access = _CONN["access_code"]
@@ -322,7 +354,7 @@ def bambu_status() -> dict:
     """
     conn = _require_conn()
     if not conn:
-        return err("not connected. Call bambu_connect() first.")
+        return err("not connected. Call bambu_connect() first, or set BAMBU_IP, BAMBU_ACCESS_CODE and BAMBU_SERIAL in the environment.")
     with _LOCK:
         s = dict(_CONN["last_state"])
         age = time.time() - _CONN["last_update"]
@@ -358,7 +390,7 @@ def bambu_control(action: str) -> dict:
     """
     conn = _require_conn()
     if not conn:
-        return err("not connected.")
+        return err("not connected. Call bambu_connect() first, or set BAMBU_IP, BAMBU_ACCESS_CODE and BAMBU_SERIAL in the environment.")
     client, serial = conn
     cmd_map = {"pause": "pause", "resume": "resume", "stop": "stop"}
     if action not in cmd_map:
@@ -454,7 +486,7 @@ def bambu_camera(save_path: str = "") -> dict:
     """
     conn = _require_conn()
     if not conn:
-        return err("not connected.")
+        return err("not connected. Call bambu_connect() first, or set BAMBU_IP, BAMBU_ACCESS_CODE and BAMBU_SERIAL in the environment.")
     with _LOCK:
         ip = _CONN["ip"]
         access = _CONN["access_code"]
@@ -480,7 +512,7 @@ def bambu_ams() -> dict:
     """
     conn = _require_conn()
     if not conn:
-        return err("not connected.")
+        return err("not connected. Call bambu_connect() first, or set BAMBU_IP, BAMBU_ACCESS_CODE and BAMBU_SERIAL in the environment.")
     with _LOCK:
         s = dict(_CONN["last_state"])
     ams_raw = s.get("ams", {})
