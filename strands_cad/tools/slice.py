@@ -1,5 +1,7 @@
 """Slice layer — OrcaSlicer / Bambu Studio CLI bridge + G-code inspection."""
 from __future__ import annotations
+
+import json
 import re
 import shutil
 import subprocess
@@ -46,6 +48,111 @@ PROFILES = {
 
 # Env override: point at any slicer CLI (Bambu/Orca AppImage/binary).
 _SLICER_ENV = "STRANDS_CAD_SLICER"
+
+
+# Bambu's process preset filenames do not always match the printer model name.
+# For example, P1S and X1E deliberately use X1C process presets, while A1 mini
+# uses the abbreviated A1M name.  These aliases mirror Bambu Studio's bundled
+# compatible_printers metadata and also cover the container, where we cannot
+# inspect preset JSON before constructing the CLI command.
+_PROCESS_PRESET_MODEL = {
+    "Bambu Lab X1 Carbon": "X1C",
+    "Bambu Lab X1": "X1C",
+    "Bambu Lab X1E": "X1C",
+    "Bambu Lab P1S": "X1C",
+    "Bambu Lab A1 mini": "A1M",
+}
+
+_FILAMENT_PRESET_MODEL = {
+    "Bambu Lab X1 Carbon": "X1C",
+    "Bambu Lab X1": "X1C",
+    "Bambu Lab X1E": "X1C",
+    "Bambu Lab A1 mini": "A1M",
+}
+
+_MATERIAL_PRESET = {
+    "PLA": "Bambu PLA Basic",
+    "PLA_SILK": "Bambu PLA Silk",
+    "PETG": "Bambu PETG Basic",
+    "TPU": "Bambu TPU 95A",
+    "ABS": "Bambu ABS",
+}
+
+
+def _short_model(printer_model: str, aliases: dict[str, str]) -> str:
+    return aliases.get(printer_model, printer_model.removeprefix("Bambu Lab "))
+
+
+def _read_json(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text())
+    except (OSError, UnicodeError, ValueError, TypeError):
+        return {}
+
+
+def _resolve_process_preset(
+    profiles_dir: Path,
+    printer_model: str,
+    layer: float,
+) -> Path | None:
+    """Resolve a process preset using Bambu's compatibility metadata.
+
+    Prefer the known canonical filename, then scan same-layer Standard presets
+    for one whose compatible_printers contains the exact machine preset.  The
+    scan keeps this working when Bambu adds or renames a printer family.
+    """
+    process_dir = profiles_dir / "process"
+    preset_model = _short_model(printer_model, _PROCESS_PRESET_MODEL)
+    preferred = process_dir / f"{layer:.2f}mm Standard @BBL {preset_model}.json"
+    if preferred.exists():
+        return preferred
+
+    machine_name = f"{printer_model} 0.4 nozzle"
+    for candidate in sorted(process_dir.glob(f"{layer:.2f}mm Standard @BBL *.json")):
+        compatible = _read_json(candidate).get("compatible_printers") or []
+        if machine_name in compatible:
+            return candidate
+    return None
+
+
+def _resolve_filament_preset(
+    profiles_dir: Path,
+    printer_model: str,
+    material: str,
+) -> Path | None:
+    """Prefer a printer-specific filament preset, then its base preset."""
+    preset_name = _MATERIAL_PRESET.get(material)
+    if not preset_name:
+        return None
+    filament_dir = profiles_dir / "filament"
+    preset_model = _short_model(printer_model, _FILAMENT_PRESET_MODEL)
+    candidates = (
+        filament_dir / f"{preset_name} @BBL {preset_model} 0.4 nozzle.json",
+        filament_dir / f"{preset_name} @BBL {preset_model}.json",
+        filament_dir / f"{preset_name} @base.json",
+    )
+    return next((path for path in candidates if path.exists()), None)
+
+
+def _resolve_model_code(printer_model: str, resources_dir: Path | None = None) -> str | None:
+    """Resolve firmware model id from slicer resources, then static fallback.
+
+    Bambu Studio stores printer capabilities in resources/printers/<id>.json.
+    Reading that metadata keeps new host-installed printer models working
+    without requiring a strands-cad release for every model addition.  The
+    static table remains necessary for containerized slicers whose resources
+    are not visible to the host Python process.
+    """
+    if resources_dir is not None:
+        printers_dir = resources_dir / "printers"
+        for candidate in sorted(printers_dir.glob("*.json")):
+            versions = _read_json(candidate)
+            for config in versions.values():
+                if not isinstance(config, dict):
+                    continue
+                if config.get("display_name") == printer_model and config.get("model_id"):
+                    return str(config["model_id"])
+    return _MODEL_CODE.get(printer_model)
 
 
 def _find_bambu_cli() -> str | None:
@@ -151,16 +258,19 @@ def _slice_with_docker(image: str, input_3mf: str, output_gcode: str,
     workdir = src.parent
     P = "/opt/orcaslicer/resources/profiles/BBL"
     prof = PROFILES.get(profile.upper())
+    if not prof:
+        return err(f"unknown profile '{profile}'. Available: {list(PROFILES)}")
     layer = prof["layer_height"] if prof else 0.20
-    short_model = printer_model.replace("Bambu Lab ", "")
+    process_model = _short_model(printer_model, _PROCESS_PRESET_MODEL)
+    filament_model = _short_model(printer_model, _FILAMENT_PRESET_MODEL)
     machine = f"{P}/machine/{printer_model} 0.4 nozzle.json"
-    process = f"{P}/process/{layer:.2f}mm Standard @BBL {short_model}.json"
+    process = f"{P}/process/{layer:.2f}mm Standard @BBL {process_model}.json"
     material = (prof or {}).get("material", "PLA")
-    fil = {"PLA": f"Bambu PLA Basic @BBL {short_model} 0.4 nozzle.json",
+    fil = {"PLA": f"Bambu PLA Basic @BBL {filament_model} 0.4 nozzle.json",
            "PLA_SILK": "Bambu PLA Silk @base.json",
-           "PETG": f"Bambu PETG Basic @BBL {short_model} 0.4 nozzle.json",
+           "PETG": f"Bambu PETG Basic @BBL {filament_model} 0.4 nozzle.json",
            "TPU": "Bambu TPU 95A @base.json",
-           "ABS": f"Bambu ABS @BBL {short_model} 0.4 nozzle.json"}.get(material, "")
+           "ABS": f"Bambu ABS @BBL {filament_model} 0.4 nozzle.json"}.get(material, "")
     filament = f"{P}/filament/{fil}" if fil else ""
     import os as _os
     # Export a REAL OrcaSlicer .3mf project (firmware requires a full bundle;
@@ -224,16 +334,17 @@ _MODEL_CODE = {
     "Bambu Lab X1E": "C13",
     "Bambu Lab P1P": "C11",
     "Bambu Lab P1S": "C12",
+    "Bambu Lab P2S": "N7",
     "Bambu Lab A1": "N2S",
     "Bambu Lab A1 mini": "N1",
 }
 
 
-def _inject_model_code(three_mf, printer_model: str) -> None:
+def _inject_model_code(three_mf, printer_model: str, model_code: str | None = None) -> None:
     """Patch printer_model_id in a sliced .3mf's slice_info.config to the
     firmware model code (OrcaSlicer CLI leaves it empty → firmware rejects)."""
     import zipfile, re
-    code = _MODEL_CODE.get(printer_model)
+    code = model_code or _MODEL_CODE.get(printer_model)
     if not code:
         return
     zin = zipfile.ZipFile(str(three_mf))
@@ -274,7 +385,7 @@ def slice_bambu(
         output_gcode: Output .gcode or .3mf (with G-code) path.
         profile: Built-in profile name (PLA_0_20, PETG_0_20, TPU_0_20, ABS_0_20, PLA_SILK_0_16).
         printer_model: Bambu machine preset (e.g. "Bambu Lab X2D", "Bambu Lab X1 Carbon",
-            "Bambu Lab A1", "Bambu Lab P1S").
+            "Bambu Lab A1", "Bambu Lab P1S", "Bambu Lab P2S").
         extra_args: Additional CLI args passed to the slicer.
 
     Returns:
@@ -322,19 +433,23 @@ def slice_bambu(
     ]
     profiles_dir = next((c for c in _cands if c.exists()), _cands[0])
     prof = PROFILES.get(profile.upper())
+    if not prof:
+        return err(f"unknown profile '{profile}'. Available: {list(PROFILES)}")
     machine_json = profiles_dir / "machine" / f"{printer_model} 0.4 nozzle.json"
     layer = prof["layer_height"] if prof else 0.20
-    short_model = printer_model.replace("Bambu Lab ", "")
-    process_json = profiles_dir / "process" / f"{layer:.2f}mm Standard @BBL {short_model}.json"
     material = (prof or {}).get("material", "PLA")
-    fil_name = {"PLA": "Bambu PLA Basic @base.json", "PLA_SILK": "Bambu PLA Silk @base.json",
-                "PETG": "Bambu PETG Basic @base.json", "TPU": "Bambu TPU 95A @base.json",
-                "ABS": "Bambu ABS @base.json"}.get(material, "Bambu PLA Basic @base.json")
-    filament_json = profiles_dir / "filament" / fil_name
-    if machine_json.exists() and process_json.exists():
-        args += ["--load-settings", f"{machine_json};{process_json}"]
-        if filament_json.exists():
-            args += ["--load-filaments", str(filament_json)]
+    process_json = _resolve_process_preset(profiles_dir, printer_model, layer)
+    filament_json = _resolve_filament_preset(profiles_dir, printer_model, material)
+    if not machine_json.exists():
+        return err(f"machine preset not found for '{printer_model}': {machine_json}")
+    if process_json is None:
+        return err(f"compatible {layer:.2f}mm Standard process preset not found "
+                   f"for '{printer_model}' under {profiles_dir / 'process'}")
+    if filament_json is None:
+        return err(f"{material} filament preset not found for '{printer_model}' "
+                   f"under {profiles_dir / 'filament'}")
+    args += ["--load-settings", f"{machine_json};{process_json}",
+             "--load-filaments", str(filament_json)]
     # Non-PLA materials aren't allowed on the default Cool Plate — pick PEI
     # ALWAYS force Textured PEI Plate: Bambu X2D/H2D do NOT support OrcaSlicer's
     # default "Cool Plate" → firmware fail_reason 50348044 "build plate mismatch".
@@ -356,7 +471,12 @@ def slice_bambu(
     out_3mf = out.parent / out_3mf_name
     if out_3mf.exists():
         try:
-            _inject_model_code(out_3mf, printer_model)
+            resources_dir = profiles_dir.parent.parent
+            _inject_model_code(
+                out_3mf,
+                printer_model,
+                model_code=_resolve_model_code(printer_model, resources_dir),
+            )
         except Exception as e:  # non-fatal; gcode still usable
             log += f"\n(model-code inject skipped: {e})"
 
@@ -374,7 +494,10 @@ def slice_bambu(
     result = str(out_3mf) if out_3mf.exists() else (str(gcode_cands[0]) if gcode_cands else "")
     return ok(f"sliced ({Path(cli).name}) → {result}",
               path=result, gcode=str(gcode_out) if gcode_out.exists() else "",
-              log=log, slicer=Path(cli).name)
+              log=log, slicer=Path(cli).name,
+              presets={"machine": str(machine_json),
+                       "process": str(process_json),
+                       "filament": str(filament_json)})
 
 
 @tool
