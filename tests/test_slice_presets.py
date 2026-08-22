@@ -1,4 +1,5 @@
 """Slicer preset resolution regressions."""
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -51,6 +52,33 @@ def test_filament_resolver_prefers_printer_specific_preset(tmp_path):
     )
 
     assert resolved == expected
+
+
+def test_model_code_resolver_reads_slicer_resource_metadata(tmp_path):
+    resources = tmp_path / "Resources"
+    _write(
+        resources / "printers" / "N7.json",
+        '{"00.00.00.00":{"display_name":"Bambu Lab P2S","model_id":"N7"}}',
+    )
+
+    resolved = slice_mod._resolve_model_code("Bambu Lab P2S", resources)
+
+    assert resolved == "N7"
+
+
+def test_p2s_model_code_is_injected_into_sliced_project(tmp_path):
+    project = tmp_path / "p2s.gcode.3mf"
+    slice_info = (
+        '<config><metadata key="printer_model_id" value=""/></config>'
+    )
+    with zipfile.ZipFile(project, "w") as archive:
+        archive.writestr("Metadata/slice_info.config", slice_info)
+
+    slice_mod._inject_model_code(project, "Bambu Lab P2S")
+
+    with zipfile.ZipFile(project) as archive:
+        updated = archive.read("Metadata/slice_info.config").decode()
+    assert 'key="printer_model_id" value="N7"' in updated
 
 
 def test_slice_bambu_loads_compatible_p1s_presets(monkeypatch, tmp_path):

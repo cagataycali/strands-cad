@@ -134,6 +134,27 @@ def _resolve_filament_preset(
     return next((path for path in candidates if path.exists()), None)
 
 
+def _resolve_model_code(printer_model: str, resources_dir: Path | None = None) -> str | None:
+    """Resolve firmware model id from slicer resources, then static fallback.
+
+    Bambu Studio stores printer capabilities in resources/printers/<id>.json.
+    Reading that metadata keeps new host-installed printer models working
+    without requiring a strands-cad release for every model addition.  The
+    static table remains necessary for containerized slicers whose resources
+    are not visible to the host Python process.
+    """
+    if resources_dir is not None:
+        printers_dir = resources_dir / "printers"
+        for candidate in sorted(printers_dir.glob("*.json")):
+            versions = _read_json(candidate)
+            for config in versions.values():
+                if not isinstance(config, dict):
+                    continue
+                if config.get("display_name") == printer_model and config.get("model_id"):
+                    return str(config["model_id"])
+    return _MODEL_CODE.get(printer_model)
+
+
 def _find_bambu_cli() -> str | None:
     """Locate a Bambu-Studio-compatible slicer CLI.
 
@@ -313,16 +334,17 @@ _MODEL_CODE = {
     "Bambu Lab X1E": "C13",
     "Bambu Lab P1P": "C11",
     "Bambu Lab P1S": "C12",
+    "Bambu Lab P2S": "N7",
     "Bambu Lab A1": "N2S",
     "Bambu Lab A1 mini": "N1",
 }
 
 
-def _inject_model_code(three_mf, printer_model: str) -> None:
+def _inject_model_code(three_mf, printer_model: str, model_code: str | None = None) -> None:
     """Patch printer_model_id in a sliced .3mf's slice_info.config to the
     firmware model code (OrcaSlicer CLI leaves it empty → firmware rejects)."""
     import zipfile, re
-    code = _MODEL_CODE.get(printer_model)
+    code = model_code or _MODEL_CODE.get(printer_model)
     if not code:
         return
     zin = zipfile.ZipFile(str(three_mf))
@@ -363,7 +385,7 @@ def slice_bambu(
         output_gcode: Output .gcode or .3mf (with G-code) path.
         profile: Built-in profile name (PLA_0_20, PETG_0_20, TPU_0_20, ABS_0_20, PLA_SILK_0_16).
         printer_model: Bambu machine preset (e.g. "Bambu Lab X2D", "Bambu Lab X1 Carbon",
-            "Bambu Lab A1", "Bambu Lab P1S").
+            "Bambu Lab A1", "Bambu Lab P1S", "Bambu Lab P2S").
         extra_args: Additional CLI args passed to the slicer.
 
     Returns:
@@ -449,7 +471,12 @@ def slice_bambu(
     out_3mf = out.parent / out_3mf_name
     if out_3mf.exists():
         try:
-            _inject_model_code(out_3mf, printer_model)
+            resources_dir = profiles_dir.parent.parent
+            _inject_model_code(
+                out_3mf,
+                printer_model,
+                model_code=_resolve_model_code(printer_model, resources_dir),
+            )
         except Exception as e:  # non-fatal; gcode still usable
             log += f"\n(model-code inject skipped: {e})"
 
