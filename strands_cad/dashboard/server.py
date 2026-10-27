@@ -45,7 +45,8 @@ log = logging.getLogger("strands_cad.dashboard")
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (JSONResponse, HTMLResponse, Response,
-                               StreamingResponse)
+                               StreamingResponse, FileResponse)
+from fastapi.staticfiles import StaticFiles
 
 from strands_cad.dashboard import auth as _auth
 from strands_cad.dashboard import camera as _camera
@@ -61,6 +62,7 @@ from strands_cad.dashboard import thinker as _thinker
 
 HERE = Path(__file__).resolve().parent
 FRONTEND = HERE / "frontend"
+DIST = FRONTEND / "dist"          # the Vite build (committed; see frontend/README.md)
 
 # printer creds (env; overridable at dashboard_start)
 BAMBU_IP = os.getenv("BAMBU_IP", "")
@@ -181,8 +183,10 @@ async def auth_ticket(request: Request):
 
 
 # ── global auth guard: seal everything except the login surface ────────────
-_PUBLIC_PREFIXES = ("/auth/",)
-_PUBLIC_EXACT = {"/", "/favicon.ico", "/api/health"}
+# /assets, /fonts, /icons are the SPA's hashed static files: no data, no secrets — the shell must load so the
+# passkey gate can render. Everything under /api (except health) stays sealed.
+_PUBLIC_PREFIXES = ("/auth/", "/assets/", "/fonts/", "/icons/")
+_PUBLIC_EXACT = {"/", "/favicon.ico", "/api/health", "/api/version", "/index.html"}
 # Routes a browser can only reach by URL (no custom headers) → scoped ticket.
 _TICKET_ROUTES = {"/api/camera/stream": "camera"}
 
@@ -214,6 +218,12 @@ async def _auth_mw(request: Request, call_next):
 @app.get("/api/health")
 async def health():
     return {"ok": True, "service": "strands-cad-dashboard"}
+
+
+@app.get("/api/version")
+async def version():
+    from strands_cad import __version__
+    return {"version": __version__, "service": "strands-cad-dashboard", "ui": "dist" if (DIST / "index.html").exists() else "legacy"}
 
 
 @app.get("/api/telemetry")
@@ -612,12 +622,35 @@ async def _autostart_bg():
 
 
 # ── static frontend ────────────────────────────────────────────────────────
+# The cockpit is a Vite + React SPA (frontend/src → frontend/dist, committed). Hashed assets are mounted
+# publicly (they carry no data); the HTML shell is public too so the passkey gate can render — every
+# /api route behind it is still sealed by the middleware. Without a dist (source checkout, no build) the
+# legacy single-file index.html is served if present, else a pointer to the build command.
+if (DIST / "assets").is_dir():
+    app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")
+for _static in ("fonts", "icons"):
+    if (DIST / _static).is_dir():
+        app.mount(f"/{_static}", StaticFiles(directory=DIST / _static), name=_static)
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    idx = FRONTEND / "index.html"
+    idx = DIST / "index.html"
     if idx.exists():
-        return HTMLResponse(idx.read_text(encoding="utf-8"))
-    return HTMLResponse("<h1>strands-cad dashboard</h1><p>frontend missing</p>")
+        return FileResponse(idx, media_type="text/html", headers={"Cache-Control": "no-cache"})
+    legacy = FRONTEND / "legacy.html"   # the pre-revamp single-file UI; removed once the pipeline lands
+    if legacy.exists():
+        return HTMLResponse(legacy.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>strands-cad dashboard</h1><p>frontend not built: "
+                        "<code>cd strands_cad/dashboard/frontend && npm ci && npm run build</code></p>")
+
+
+@app.get("/favicon.ico")
+async def favicon():
+    ico = DIST / "icons" / "favicon.png"
+    if ico.exists():
+        return FileResponse(ico, media_type="image/png")
+    raise HTTPException(404)
 
 
 def create_app() -> FastAPI:

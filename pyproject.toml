@@ -108,4 +108,4 @@ Issues     = "https://github.com/cagataycali/strands-cad/issues"
 packages = ["strands_cad"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"strands_cad/dashboard/frontend/index.html" = "strands_cad/dashboard/frontend/index.html"
+"strands_cad/dashboard/frontend/dist" = "strands_cad/dashboard/frontend/dist"

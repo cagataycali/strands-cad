@@ -1,0 +1,1213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>🔧 strands-cad · cockpit</title>
+<style>
+  :root{
+    --bg:#0a0a0f; --panel:#13131c; --panel2:#0b0b12; --line:rgba(255,255,255,.10);
+    --txt:#e8e8f0; --dim:#8a8aa0; --accent:#76b900; --accent2:#00d9ff;
+    --hot:#ff6b4a; --warn:#ffce54; --ok:#9be319;
+    --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
+    --dock-h:148px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
+       background:radial-gradient(1200px 800px at 70% -10%,#161624,#0a0a0f);
+       color:var(--txt);overflow:hidden}
+  a{color:var(--accent)}
+  button{font-family:inherit}
+  .hide{display:none!important}
+  .muted{color:var(--dim);font-size:12px}
+  input,select,textarea{background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--txt);
+         border-radius:10px;padding:10px;font-size:16px;width:100%;font-family:inherit}
+  label{font-size:12px;color:var(--dim);display:block;margin:10px 0 4px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+  /* ===== APP SHELL — single screen ===== */
+  #app{display:flex;flex-direction:column;height:100dvh;padding-top:var(--safe-t)}
+  header{display:flex;align-items:center;justify-content:space-between;
+         padding:10px 14px;gap:10px;border-bottom:1px solid var(--line);flex:0 0 auto}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--dim);box-shadow:0 0 10px currentColor}
+  .brand .dot.on{background:var(--ok);color:var(--ok)}
+  .hbtns{display:flex;gap:6px;align-items:center}
+  .pill{font-size:10px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+  .voiceorb{width:12px;height:12px;border-radius:50%;background:var(--dim);transition:.2s}
+  .voiceorb.live{background:var(--hot);box-shadow:0 0 16px var(--hot);animation:pulse 1.2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .iconbtn{padding:7px 11px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.05);
+           color:var(--txt);font-size:13px;cursor:pointer}
+  .iconbtn:hover{background:rgba(255,255,255,.1)}
+
+  /* ===== STAGE — camera IS the hero (center, big). Right rail = model menu.
+     Plate + 3D-preview + Telemetry float as corner-snap PiPs. ===== */
+  .stage{flex:1 1 auto;overflow:hidden;min-height:0;display:flex;position:relative}
+
+  /* CENTER: the live camera fills the stage */
+  .camstage{flex:1 1 auto;position:relative;background:#000;min-width:0;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .camstage img{width:100%;height:100%;object-fit:contain;display:block}
+  .camstage .camtag{position:absolute;top:12px;left:12px;z-index:2;font-size:11px;color:#fff;
+        display:flex;gap:6px;align-items:center;text-shadow:0 1px 3px #000;background:rgba(0,0,0,.35);
+        padding:5px 10px;border-radius:9px;backdrop-filter:blur(6px)}
+  .camstage .camtag .rec{width:7px;height:7px;border-radius:50%;background:var(--hot);animation:pulse 1.4s infinite}
+
+  /* RIGHT RAIL: model menu + spinning object preview */
+  .rail{flex:0 0 300px;display:flex;flex-direction:column;gap:10px;padding:12px;overflow-y:auto;
+        border-left:1px solid var(--line);background:linear-gradient(180deg,var(--panel),var(--panel2))}
+  .rail h2{margin:0 0 6px;font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;
+           display:flex;align-items:center;gap:8px;justify-content:space-between}
+  /* spinning 3D preview of the picked model */
+  #objpreview{width:100%;aspect-ratio:1/1;border-radius:14px;background:#07070d;border:1px solid var(--line);
+        overflow:hidden;position:relative;touch-action:none;flex:0 0 auto}
+  #objpreview canvas{display:block;width:100%;height:100%}
+  .previewname{font-size:11px;color:var(--dim);text-align:center;margin-top:-4px;min-height:14px}
+  /* model menu list */
+  .menu{flex:1 1 auto;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:5px}
+  .mitem{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:11px;cursor:pointer;
+         border:1px solid var(--line);background:rgba(255,255,255,.03);transition:.15s}
+  .mitem:hover{background:rgba(255,255,255,.07);border-color:var(--accent)}
+  .mitem.sel{border-color:var(--accent);background:rgba(118,185,0,.1)}
+  .mitem .ic{font-size:18px;flex:0 0 auto}
+  .mitem .info{flex:1;min-width:0}
+  .mitem .nm{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mitem .sz{font-size:10px;color:var(--dim)}
+  .mitem .add{flex:0 0 auto;width:30px;height:30px;border-radius:9px;border:1px solid var(--accent);
+        background:var(--accent);color:#07120a;font-size:16px;font-weight:700;cursor:pointer;line-height:1}
+
+  .card{background:linear-gradient(160deg,var(--panel),var(--panel2));border:1px solid var(--line);
+        border-radius:18px;padding:14px;box-shadow:0 16px 40px rgba(0,0,0,.4);
+        min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+  .card .body{flex:1 1 auto;overflow-y:auto;min-height:0;margin:-2px;padding:2px}
+  .card h2{margin:0 0 10px;font-size:12px;font-weight:600;color:var(--dim);
+           text-transform:uppercase;letter-spacing:.08em;display:flex;align-items:center;gap:8px;justify-content:space-between}
+
+  .btns{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .btns button{flex:1;padding:11px;border-radius:11px;border:1px solid var(--line);background:rgba(255,255,255,.05);
+         color:var(--txt);font-size:13px;font-weight:600;cursor:pointer;transition:.15s;min-width:76px}
+  .btns button:hover{background:rgba(255,255,255,.1)}
+  .btns button.primary{background:var(--accent);color:#07120a;border-color:var(--accent)}
+  .btns button.accent2{background:var(--accent2);color:#04121a;border-color:var(--accent2)}
+  .btns button.danger{background:rgba(255,107,74,.14);color:var(--hot);border-color:rgba(255,107,74,.4)}
+  .btns button:disabled{opacity:.4;cursor:not-allowed}
+  .seg{display:flex;gap:4px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:10px;padding:3px}
+  .seg button{flex:1;padding:6px;border:0;background:none;color:var(--dim);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer}
+  .seg button.on{background:var(--accent);color:#07120a}
+
+  /* 3D canvases */
+  #plateView{width:100%;flex:1 1 auto;min-height:180px;background:#07070d;overflow:hidden;position:relative;touch-action:none}
+  #plateView canvas{display:block;width:100%;height:100%}
+
+  .modellist{max-height:150px;overflow:auto;margin-top:6px}
+  .mrow{display:flex;align-items:center;gap:9px;padding:7px;border-radius:9px;cursor:pointer;border:1px solid transparent}
+  .mrow:hover{background:rgba(255,255,255,.05)}
+  .mrow.sel{border-color:var(--accent);background:rgba(118,185,0,.08)}
+  .mrow .nm{flex:1;font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mrow .sz{font-size:10px;color:var(--dim)}
+  .prow{display:flex;align-items:center;gap:9px;padding:6px 0;flex-wrap:wrap}
+  .prow input[type=color]{width:34px;height:28px;border:none;border-radius:8px;background:none;cursor:pointer;padding:0}
+  .prow .pn{flex:1;font-size:12px;min-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .prow input[type=range]{flex:1;min-width:70px}
+
+  /* filament palette chips */
+  .palette{display:flex;gap:7px;flex-wrap:wrap;margin-top:4px}
+  .chip{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;font-size:9px;color:var(--dim)}
+  .chip .sw{width:34px;height:34px;border-radius:8px;border:2px solid var(--line);position:relative;display:flex;align-items:flex-end;justify-content:center}
+  .chip .sw .rem{font-size:8px;color:#fff;text-shadow:0 1px 2px #000,0 0 3px #000;padding-bottom:1px;font-weight:700}
+  .chip .src{font-size:7px;padding:0 4px;border-radius:5px;background:rgba(255,255,255,.08);color:var(--dim);letter-spacing:.04em}
+  .chip.sel .sw{border-color:#fff;box-shadow:0 0 0 2px var(--accent)}
+
+  /* plate item editor cards (move via 3D drag, size/turn via sliders) */
+  .pitem{border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin-bottom:7px;background:rgba(255,255,255,.03);transition:.15s}
+  .pitem.sel{border-color:var(--accent);background:rgba(118,185,0,.09)}
+  .pitemhead{display:flex;align-items:center;gap:9px}
+  .pitemhead input[type=color]{width:30px;height:26px;border:none;border-radius:7px;background:none;cursor:pointer;padding:0;flex:0 0 auto}
+  .pitemhead .pn{flex:1;font-size:13px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+  .ctlrow{display:flex;align-items:center;gap:8px;margin-top:6px}
+  .ctlrow .cl{font-size:10px;color:var(--dim);width:32px;flex:0 0 auto}
+  .ctlrow input[type=range]{flex:1;min-width:60px}
+  .ctlrow .cv{font-size:10px;color:var(--txt);width:38px;text-align:right;font-variant-numeric:tabular-nums;flex:0 0 auto}
+
+  /* camera */
+  .cam{position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center}
+  .cam img{width:100%;height:100%;object-fit:cover;display:block}
+  .cam .badge{position:absolute;top:9px;left:9px;font-size:10px;padding:4px 8px;border-radius:8px;background:rgba(0,0,0,.55);color:#fff;display:flex;gap:6px;align-items:center}
+  .cam .badge .rec{width:7px;height:7px;border-radius:50%;background:var(--hot);animation:pulse 1.4s infinite}
+
+  /* telemetry */
+  .stat{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--line)}
+  .stat:last-child{border-bottom:0}
+  .stat .k{color:var(--dim);font-size:12px}
+  .stat .v{font-variant-numeric:tabular-nums;font-weight:600;font-size:14px}
+  .temps{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px}
+  .temp{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:11px;padding:8px;text-align:center}
+  .temp .lbl{font-size:10px;color:var(--dim)} .temp .val{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums} .temp .tgt{font-size:10px;color:var(--dim)}
+  .bar{height:7px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden;margin:6px 0 2px}
+  .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0%;transition:width .6s}
+  .ams{display:flex;gap:7px;flex-wrap:wrap;margin-top:6px}
+  .slot{width:34px;height:46px;border-radius:8px;border:2px solid var(--line);position:relative;overflow:hidden}
+  .slot .fill{position:absolute;bottom:0;left:0;right:0} .slot .pc{position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:9px;text-shadow:0 1px 2px #000}
+  .noz{font-size:9px;color:var(--dim);text-align:center;margin-top:2px}
+
+  /* ===== FLOATING PiP SYSTEM (camera + plate) — iPhone-style corner snap ===== */
+  .pip{position:fixed;z-index:35;border-radius:16px;overflow:hidden;
+       border:1px solid var(--line);background:#000;box-shadow:0 18px 50px rgba(0,0,0,.6);
+       transition:box-shadow .2s, transform .22s cubic-bezier(.22,1,.36,1), left .22s cubic-bezier(.22,1,.36,1), top .22s cubic-bezier(.22,1,.36,1);
+       user-select:none;touch-action:none}
+  .pip.dragging{transition:box-shadow .2s;box-shadow:0 26px 80px rgba(0,0,0,.85);transform:scale(1.02)}
+  .pip .piphead{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;
+          padding:6px 8px;background:linear-gradient(180deg,rgba(0,0,0,.65),transparent);z-index:3;cursor:grab}
+  .pip.dragging .piphead{cursor:grabbing}
+  .pip .pipttl{font-size:10px;color:#fff;display:flex;gap:6px;align-items:center;text-shadow:0 1px 2px #000;font-weight:600}
+  .pip .pipttl .rec{width:7px;height:7px;border-radius:50%;background:var(--hot);animation:pulse 1.4s infinite}
+  .pip .pipbtns{display:flex;gap:4px}
+  .pip .pipbtns button{width:22px;height:22px;border-radius:6px;border:1px solid rgba(255,255,255,.2);
+          background:rgba(0,0,0,.45);color:#fff;font-size:11px;cursor:pointer;line-height:1;padding:0}
+  .pip .pipbtns button:hover{background:rgba(255,255,255,.18)}
+  /* the drag handle "accessibility nub" like iPhone */
+  .pip .grabnub{position:absolute;left:50%;top:4px;transform:translateX(-50%);width:34px;height:4px;
+          border-radius:3px;background:rgba(255,255,255,.35);z-index:4;pointer-events:none}
+  /* snap hint zones */
+  .snapzone{position:fixed;z-index:34;width:120px;height:120px;pointer-events:none;opacity:0;
+          border:2px dashed var(--accent);border-radius:18px;transition:opacity .15s;background:rgba(118,185,0,.08)}
+  .snapzone.show{opacity:.7}
+
+  /* PLATE pip — the critical view: solid build plate, draggable + editable */
+  .platepip{width:340px;max-width:52vw;cursor:grab;background:#07070d}
+  .platepip.min{width:150px}
+  .platepip #plateView{width:100%;aspect-ratio:1/1;min-height:0;border:0;border-radius:0}
+  .platepip.min #plateView{aspect-ratio:1/1}
+  .platepip .platebody{max-height:0;overflow:hidden;transition:max-height .25s ease;background:var(--panel)}
+  .platepip.open .platebody{max-height:56vh;overflow-y:auto;padding:10px}
+  .platepip.full{left:0!important;top:0!important;width:100vw!important;height:100vh;max-width:none;border-radius:0;z-index:60;transition:none}
+  .platepip.full #plateView{aspect-ratio:auto;height:58vh}
+  .platepip.full .platebody{max-height:42vh;overflow-y:auto;padding:12px}
+
+  /* TELEMETRY pip — sticky corner card */
+  .telempip{width:270px;max-width:46vw;cursor:grab;background:linear-gradient(160deg,var(--panel),var(--panel2))}
+  .telempip.min{width:150px}
+  .telempip .telembody{padding:8px 12px 12px;max-height:56vh;overflow-y:auto}
+  .telempip.min .telembody{display:none}
+  .telempip .piphead{background:linear-gradient(180deg,rgba(0,0,0,.4),transparent)}
+
+  @media(max-width:760px){.platepip{width:150px}.telempip{width:150px}}
+
+  /* ===== DOCK (chat + voice) — OVERLAY on top of everything ===== */
+  .dock{position:fixed;left:0;right:0;bottom:0;z-index:50;
+        background:linear-gradient(180deg,rgba(10,10,15,0),rgba(10,10,15,.92) 42%);
+        backdrop-filter:blur(16px);border-top:1px solid var(--line);
+        padding:8px 12px calc(8px + var(--safe-b));
+        transition:transform .25s ease}
+  .dock.collapsed{transform:translateY(calc(100% - 60px))}
+  .dock .dockgrip{position:absolute;top:-11px;left:50%;transform:translateX(-50%);
+        width:52px;height:22px;border-radius:11px 11px 0 0;background:var(--panel);
+        border:1px solid var(--line);border-bottom:0;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:11px}
+  .dock .transcript{max-height:34vh;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:7px}
+  .msg{padding:7px 12px;border-radius:13px;max-width:88%;font-size:13px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+  .msg.u{align-self:flex-end;background:var(--accent);color:#07120a}
+  .msg.a{align-self:flex-start;background:rgba(255,255,255,.07);border:1px solid var(--line)}
+  .msg.sys{align-self:center;color:var(--dim);font-size:11px;background:none;padding:2px}
+  .msg.voice{align-self:flex-start;background:rgba(0,217,255,.1);border:1px solid rgba(0,217,255,.3)}
+  .msg.thinking{animation:pulse 1.2s infinite}
+  .sendbtn:disabled{opacity:.45;cursor:not-allowed}
+  .msg.tool{align-self:center;color:var(--accent2);font-size:11px;background:rgba(0,217,255,.06);border-radius:8px;font-family:ui-monospace,monospace}
+  .dockin{display:flex;gap:8px;align-items:flex-end}
+  .dockin textarea{flex:1;resize:none;height:44px;max-height:120px;padding:11px}
+  .micbtn{flex:0 0 auto;width:46px;height:46px;border-radius:50%;border:1px solid var(--line);
+          background:rgba(0,217,255,.1);color:var(--accent2);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .micbtn.live{background:var(--hot);border-color:var(--hot);color:#fff;animation:pulse 1.2s infinite}
+  .sendbtn{flex:0 0 auto;width:46px;height:46px;border-radius:50%;border:1px solid var(--accent);
+           background:var(--accent);color:#07120a;font-size:18px;cursor:pointer}
+
+  /* ===== MOBILE — camera is a FULL-SCREEN backdrop; chat is a translucent
+     glass sheet that expands from a peek all the way up to 100% over the camera.
+     Plate + telemetry float as compact PiPs. Everything coexists on one screen. ===== */
+  @media(max-width:760px){
+    #app{height:100dvh}
+    /* camera fills the ENTIRE screen behind everything */
+    .stage{position:fixed;inset:0;height:100dvh;width:100vw;display:block;z-index:1}
+    .rail{display:none}                                 /* model menu → ☰ sheet */
+    .camstage{width:100%;height:100%}
+    .camstage img{object-fit:cover}                     /* fill, no letterbox */
+    /* push the ● LIVE badge BELOW the floating header so they don't overlap
+       (header ≈ safe-top + ~56px of brand/buttons). */
+    .camstage .camtag{top:calc(var(--safe-t) + 64px)}
+
+    /* header floats as a translucent bar over the camera */
+    header{position:fixed;top:0;left:0;right:0;z-index:46;
+           background:linear-gradient(180deg,rgba(8,9,14,.72),rgba(8,9,14,0));
+           border-bottom:0;padding:calc(var(--safe-t) + 8px) 12px 14px}
+    .brand{font-size:14px;text-shadow:0 1px 3px #000}
+    header .pill{display:none}                           /* hide pills on mobile (state shown in telemetry PiP) */
+    .hbtns{gap:4px}
+    .iconbtn{padding:7px 8px;font-size:15px;line-height:1;border-radius:9px;
+             overflow:hidden;white-space:nowrap;max-width:40px}   /* compact: emoji shows, label clipped */
+
+    /* CHAT = frosted-glass bottom sheet, snaps: peek → half → full */
+    .dock{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:45;height:44dvh;
+          background:linear-gradient(180deg,rgba(10,11,17,.28),rgba(10,11,17,.86) 34%);
+          -webkit-backdrop-filter:blur(22px) saturate(1.2);backdrop-filter:blur(22px) saturate(1.2);
+          border-top:1px solid rgba(255,255,255,.12);border-radius:22px 22px 0 0;
+          box-shadow:0 -18px 50px rgba(0,0,0,.5);
+          display:flex;flex-direction:column;padding:14px 12px calc(10px + var(--safe-b));
+          transition:height .3s cubic-bezier(.32,.72,0,1);transform:none!important}
+    .dock.half{height:70dvh}
+    .dock.full{height:calc(100dvh - 52px)}               /* camera still peeks at very top */
+    .dock.collapsed{height:calc(84px + var(--safe-b));transform:none!important}
+    /* grip = a big invisible drag/tap zone; the visible pill is drawn via ::before.
+       Tall enough (>=44px) to be an easy finger target; supports DRAG to resize. */
+    .dock .dockgrip{display:flex!important;position:absolute;top:0;left:50%;transform:translateX(-50%);
+          width:140px;height:34px;border-radius:0 0 14px 14px;background:transparent;border:0;color:transparent;
+          font-size:0;padding:0;touch-action:none;cursor:grab;z-index:2}
+    .dock .dockgrip::before{content:"";position:absolute;top:9px;left:50%;transform:translateX(-50%);
+          width:46px;height:5px;border-radius:3px;background:rgba(255,255,255,.42);transition:width .2s,background .2s}
+    .dock .dockgrip:active{cursor:grabbing}
+    .dock .dockgrip:active::before{width:60px;background:rgba(255,255,255,.7)}
+    .dock.dockdragging{transition:none!important}
+    /* invite the pull when collapsed: brighter, wider, gently breathing pill */
+    .dock.collapsed .dockgrip::before{width:64px;height:6px;background:rgba(255,255,255,.6);
+          animation:gripbreathe 2.4s ease-in-out infinite}
+    @keyframes gripbreathe{0%,100%{opacity:.55;width:56px}50%{opacity:1;width:72px}}
+    .dock .transcript{max-height:none;flex:1 1 auto;min-height:0;overflow-y:auto;margin:16px 0 8px}
+    .dock.collapsed .transcript{display:none}
+    .dock.collapsed #voiceStatus{display:none}
+    .msg{max-width:92%}
+
+    /* mobile model sheet trigger */
+    .mobmenu{display:flex!important}
+    /* bigger touch targets for pip controls on phones */
+    .pip .pipbtns{gap:6px}
+    .pip .pipbtns button{width:32px;height:32px;font-size:14px;border-radius:8px}
+    .pip .piphead{padding:6px 8px}
+
+    /* PiPs hover small over the camera; telemetry gets enough room for its 3 temp cards */
+    .platepip{width:132px}
+    .telempip{width:min(52vw,176px);max-width:none}
+    .telempip.min{width:132px}
+    .telempip .telembody{max-height:44dvh}
+    .temps{gap:6px}
+    .temp{padding:6px 4px}
+    .temp .val{font-size:15px}
+  }
+  .mobmenu{display:none;position:fixed;top:calc(var(--safe-t) + 8px);right:12px;z-index:55;
+        width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--panel);
+        color:var(--txt);font-size:18px;align-items:center;justify-content:center;cursor:pointer}
+  /* model sheet (slides up on mobile) */
+  .sheet{position:fixed;inset:0;z-index:58;background:rgba(5,5,10,.6);backdrop-filter:blur(6px);display:none}
+  .sheet.show{display:block}
+  .sheet .sheetpanel{position:absolute;left:0;right:0;bottom:0;max-height:80vh;overflow-y:auto;
+        background:var(--panel);border-radius:20px 20px 0 0;padding:16px;padding-bottom:calc(16px + var(--safe-b))}
+
+  /* ===== CONFIG DRAWER (top-level menu) ===== */
+  .drawer{position:fixed;inset:0;z-index:40;background:rgba(5,5,10,.6);backdrop-filter:blur(6px);display:flex;justify-content:flex-end}
+  .drawer .panel{width:min(560px,100vw);height:100%;background:var(--panel);border-left:1px solid var(--line);
+        padding:18px;padding-top:calc(18px + var(--safe-t));overflow-y:auto;box-shadow:-20px 0 60px rgba(0,0,0,.6)}
+  .drawer h2{font-size:13px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin:18px 0 8px}
+  .drawer h2:first-child{margin-top:0}
+
+  /* auth overlay */
+  .overlay{position:fixed;inset:0;background:rgba(5,5,10,.9);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px}
+  .authcard{width:min(420px,94vw);text-align:center;background:linear-gradient(160deg,var(--panel),var(--panel2));
+            border:1px solid var(--line);border-radius:20px;padding:26px}
+  .authcard .lock{font-size:44px;margin-bottom:6px}
+  .authcard p{color:var(--dim);font-size:14px;line-height:1.6}
+  .authcard button{width:100%;margin-top:10px;padding:13px;border-radius:12px;border:1px solid var(--accent);background:var(--accent);color:#07120a;font-weight:700;cursor:pointer}
+  .warn{background:rgba(255,206,84,.1);border:1px dashed rgba(255,206,84,.4);color:var(--warn);border-radius:12px;padding:12px;font-size:13px;margin:12px 0}
+  .toast{position:fixed;bottom:calc(var(--dock-h) + 20px);left:50%;transform:translateX(-50%);background:#1a1a26;border:1px solid var(--line);padding:11px 18px;border-radius:12px;font-size:13px;opacity:0;transition:.3s;z-index:70;pointer-events:none}
+  .toast.show{opacity:1}
+  @media(max-width:760px){.toast{bottom:calc(90px + var(--safe-b))}}
+</style>
+</head>
+<body>
+<!-- AUTH OVERLAY -->
+<div id="overlay" class="overlay">
+  <div class="authcard">
+    <div class="lock">🔐</div>
+    <h2 style="text-transform:none;letter-spacing:0;font-size:20px;margin:0">strands-cad cockpit</h2>
+    <p id="authMsg">Checking access…</p>
+    <div id="warnBox" class="warn hide"></div>
+    <button id="btnEnroll" class="hide" onclick="enroll()">🔑 Create passkey (seal this cockpit)</button>
+    <button id="btnLogin" class="hide" onclick="login()">🔓 Unlock with passkey</button>
+    <input id="bootstrap" class="hide" placeholder="bootstrap token" style="margin-top:8px">
+  </div>
+</div>
+
+<!-- ===== SINGLE-SCREEN APP ===== -->
+<div id="app">
+  <header>
+    <div class="brand"><span id="statusDot" class="dot"></span> 🔧 strands-cad
+      <span class="pill" id="serialPill">cockpit</span>
+      <span class="pill" id="statePill">—</span>
+    </div>
+    <div class="hbtns">
+      <span class="voiceorb" id="voiceOrb" title="voice"></span>
+      <button class="iconbtn" onclick="openConfig()">⚙️ Config</button>
+      <button class="iconbtn" onclick="logout()">⏻</button>
+    </div>
+  </header>
+
+  <!-- STAGE: camera is the hero (center) + model rail (right) -->
+  <div class="stage">
+    <!-- CENTER: big live camera -->
+    <div class="camstage" id="camstage">
+      <div class="camtag"><span class="rec"></span> LIVE <span id="camRes" style="color:#bbb"></span></div>
+      <img id="cam" alt="camera" src="">
+    </div>
+
+    <!-- RIGHT RAIL: spinning object preview + model menu -->
+    <div class="rail" id="rail">
+      <h2>🧊 Object preview <span class="muted" id="objName" style="flex:0 0 auto"></span></h2>
+      <div id="objpreview"></div>
+      <div class="previewname" id="previewName">pick a model below</div>
+      <div class="btns" style="margin-top:2px">
+        <button class="primary" onclick="addCurrentToPlate()">➕ To plate</button>
+        <button class="accent2" onclick="spinToggle()" id="spinBtn">⏸ Spin</button>
+      </div>
+      <h2 style="margin-top:6px">📚 Models
+        <button class="iconbtn" style="flex:0 0 auto;padding:4px 9px;font-size:11px" onclick="loadModels()">↻</button>
+      </h2>
+      <div class="menu" id="menu"><span class="muted">Loading…</span></div>
+    </div>
+  </div>
+
+  <!-- mobile model sheet trigger -->
+  <div class="mobmenu" id="mobMenu" onclick="openSheet()">☰</div>
+
+  <!-- SNAP ZONES (corner hints while dragging) -->
+  <div class="snapzone" id="sz-tl"></div><div class="snapzone" id="sz-tr"></div>
+  <div class="snapzone" id="sz-bl"></div><div class="snapzone" id="sz-br"></div>
+
+  <!-- FLOATING TELEMETRY PiP (sticky corner) -->
+  <div class="pip telempip" id="telempip">
+    <div class="grabnub"></div>
+    <div class="piphead" data-drag>
+      <span class="pipttl">🖨️ <span id="statePillMini" style="color:var(--dim)">telemetry</span></span>
+      <span class="pipbtns">
+        <button onclick="telemMin(event)" title="minimize" id="telemMinBtn">▁</button>
+      </span>
+    </div>
+    <div class="telembody">
+      <div class="stat"><span class="k">Job</span><span class="v" id="job">—</span></div>
+      <div class="stat"><span class="k">Progress</span><span class="v" id="pct">—</span></div>
+      <div class="bar"><i id="barFill"></i></div>
+      <div class="stat"><span class="k">Layer</span><span class="v" id="layer">—</span></div>
+      <div class="stat"><span class="k">Time left</span><span class="v" id="eta">—</span></div>
+      <div class="stat"><span class="k">SD card</span><span class="v" id="sdcard">—</span></div>
+      <div class="temps">
+        <div class="temp"><div class="lbl">Nozzle</div><div class="val" id="tN">—</div><div class="tgt" id="tNt">/ —</div></div>
+        <div class="temp"><div class="lbl">Bed</div><div class="val" id="tB">—</div><div class="tgt" id="tBt">/ —</div></div>
+        <div class="temp"><div class="lbl">Chamber</div><div class="val" id="tC">—</div><div class="tgt">°C</div></div>
+      </div>
+      <h2 style="margin-top:12px;font-size:11px;color:var(--dim)">🎞️ AMS</h2>
+      <div class="ams" id="ams"><span class="muted">no AMS</span></div>
+      <div class="btns">
+        <button onclick="ctl('pause')">⏸</button>
+        <button onclick="ctl('resume')">▶</button>
+        <button class="danger" onclick="ctl('stop')">⏹</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FLOATING PLATE PiP (draggable, corner-snap, expandable controls, fullscreen) -->
+  <div class="pip platepip" id="platepip">
+    <div class="grabnub"></div>
+    <div class="piphead" data-drag>
+      <span class="pipttl">🍽️ Plate <span id="plateBed" style="color:var(--dim)"></span></span>
+      <span class="pipbtns">
+        <button onclick="plateFull(event)" title="fullscreen" id="plateFullBtn">⛶</button>
+        <button onclick="plateToggleBody(event)" title="controls" id="plateBodyBtn">⚙</button>
+        <button onclick="plateMin(event)" title="minimize" id="plateMinBtn">▁</button>
+      </span>
+    </div>
+    <div id="plateView"></div>
+    <div class="platebody" id="platebody">
+      <div style="display:flex;gap:8px">
+        <select id="plateAddSel" style="flex:1"></select>
+        <button class="iconbtn" style="flex:0;min-width:60px" onclick="plateAddSelected()">Add</button>
+      </div>
+      <h2 style="margin-top:12px">🎨 Filament palette
+        <button class="iconbtn" style="flex:0 0 auto;padding:4px 9px;font-size:11px" onclick="syncAMS()" title="pull loaded colors from AMS">↻ AMS</button>
+      </h2>
+      <div class="palette" id="palette"></div>
+      <div id="plateItems" style="margin-top:8px"><span class="muted">Plate is empty.</span></div>
+      <div class="btns">
+        <button onclick="plateArrange()">⤢ Arrange</button>
+        <button class="danger" onclick="plateClear()">🗑 Clear</button>
+      </div>
+      <div class="btns">
+        <button class="accent2" onclick="plateSlice()">🔪 Slice plate</button>
+        <button class="primary" onclick="platePrint()">🖨️ Print plate</button>
+      </div>
+      <div id="plateJob" class="muted" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <!-- MOBILE MODEL SHEET (slides up) -->
+  <div class="sheet" id="sheet" onclick="if(event.target===this)closeSheet()">
+    <div class="sheetpanel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-weight:700;font-size:16px">📚 Models</div>
+        <button class="iconbtn" onclick="closeSheet()">✕</button>
+      </div>
+      <div id="objpreviewMob" style="width:140px;aspect-ratio:1/1;margin:0 auto 8px;border-radius:14px;background:#07070d;border:1px solid var(--line);overflow:hidden"></div>
+      <div class="previewname" id="previewNameMob" style="margin-bottom:10px">pick a model</div>
+      <div class="menu" id="menuMob"></div>
+    </div>
+  </div>
+
+  <!-- DOCK: chat + voice — overlays everything, collapsible -->
+  <div class="dock" id="dock">
+    <div class="dockgrip" id="dockGrip" title="drag to resize · tap to cycle"></div>
+    <div class="transcript" id="chatlog"></div>
+    <div class="dockin">
+      <button class="micbtn" id="micBtn" onclick="toggleVoice()" title="voice">🎙️</button>
+      <textarea id="chatInput" placeholder="Ask the CAD agent… (e.g. add two brackets, make one red, arrange & print)"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
+      <button class="sendbtn" onclick="sendChat()">➤</button>
+    </div>
+    <div class="muted" id="voiceStatus" style="margin-top:4px;min-height:14px"></div>
+  </div>
+</div>
+
+<!-- CONFIG DRAWER -->
+<div id="configDrawer" class="drawer hide" onclick="if(event.target===this)closeConfig()">
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="font-weight:700;font-size:18px">⚙️ Configuration</div>
+      <button class="iconbtn" onclick="closeConfig()">✕</button>
+    </div>
+    <h2>🖨️ Printer</h2>
+    <div class="row2">
+      <div><label>Printer IP</label><input id="cfg_ip"></div>
+      <div><label>Serial</label><input id="cfg_serial"></div>
+    </div>
+    <label>Access code <span id="acSet" class="muted"></span></label>
+    <input id="cfg_access_code" type="password" placeholder="leave blank to keep existing">
+    <div class="row2">
+      <div><label>Printer model</label>
+        <select id="cfg_printer_model">
+          <option>Bambu Lab H2D</option><option>Bambu Lab P1S</option><option>Bambu Lab P1P</option>
+          <option>Bambu Lab X1 Carbon</option><option>Bambu Lab A1</option><option>Bambu Lab A1 mini</option>
+        </select>
+      </div>
+      <div><label>Nozzle count</label><input id="cfg_nozzle_count" type="number" min="1" max="2"></div>
+    </div>
+
+    <h2>🎨 Filaments (AMS + external)</h2>
+    <div id="cfgFilaments"></div>
+    <div class="btns"><button class="iconbtn" onclick="addFilamentRow()">➕ Add filament</button></div>
+
+    <h2>🤖 Chat agent</h2>
+    <div class="row2">
+      <div><label>Model (STRANDS_MODEL_ID)</label><input id="cfg_model" placeholder="default"></div>
+      <div><label>Working dir</label><input id="cfg_workdir"></div>
+    </div>
+
+    <h2>🎙️ Voice (OpenAI Realtime)</h2>
+    <div class="row2">
+      <div><label>Voice model</label><input id="cfg_voice_model" placeholder="gpt-realtime"></div>
+      <div><label>Voice name</label>
+        <select id="cfg_voice_name">
+          <option>alloy</option><option>ash</option><option>ballad</option><option>coral</option>
+          <option>echo</option><option>sage</option><option>shimmer</option><option>verse</option>
+          <option>cedar</option><option>marin</option>
+        </select>
+      </div>
+    </div>
+    <label>OpenAI API key <span id="oaSet" class="muted"></span></label>
+    <input id="cfg_openai_api_key" type="password" placeholder="leave blank to keep existing">
+
+    <h2>🔪 Slicing</h2>
+    <div class="row2">
+      <div><label>Profile</label>
+        <select id="cfg_slice_profile">
+          <option>PLA_0_20</option><option>PLA_SILK_0_16</option><option>PETG_0_20</option>
+          <option>TPU_0_20</option><option>ABS_0_20</option>
+        </select>
+      </div>
+      <div></div>
+    </div>
+
+    <h2>📷 Camera</h2>
+    <div class="row2">
+      <div><label>FPS</label><input id="cfg_cam_fps" type="number" min="1" max="30"></div>
+      <div><label>Quality (2=best…31)</label><input id="cfg_cam_quality" type="number" min="2" max="31"></div>
+    </div>
+
+    <h2>📨 Telegram</h2>
+    <div class="muted" id="tgStatus">—</div>
+    <div class="btns"><button class="iconbtn" onclick="tgTest()">Send test</button>
+      <button class="iconbtn" onclick="tgDetect()">Detect chat id</button></div>
+
+    <div class="btns" style="margin-top:18px"><button class="primary" onclick="saveConfig()">💾 Save & hot-apply</button></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+window.THREE=THREE; window.OrbitControls=OrbitControls; window.STLLoader=STLLoader;
+
+const $ = s => document.querySelector(s);
+let TOKEN = localStorage.getItem('cad_token') || '';
+window.authHeaders = () => TOKEN ? {'Authorization':'Bearer '+TOKEN} : {};
+const J = ()=>({'Content-Type':'application/json',...authHeaders()});
+window.toast = (m)=>{const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(()=>t.classList.remove('show'),2600);};
+
+const b64uToBuf = s => { s=s.replace(/-/g,'+').replace(/_/g,'/'); const p='='.repeat((4-s.length%4)%4);
+  const b=atob(s+p); const u=new Uint8Array(b.length); for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i); return u.buffer; };
+const bufToB64u = b => { const u=new Uint8Array(b); let s=''; for(const x of u)s+=String.fromCharCode(x);
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); };
+
+// ── auth ─────────────────────────────────────────────────────────────
+async function checkAuth(){
+  const r = await fetch('/auth/status',{headers:authHeaders()}); const s = await r.json();
+  if(s.warning){ $('#warnBox').textContent='⚠️ '+s.warning; $('#warnBox').classList.remove('hide'); }
+  if(!s.enabled){ unlock(); return; }
+  if(TOKEN){ const t=await fetch('/api/health',{headers:authHeaders()}); if(t.ok){ unlock(); return; }
+    TOKEN=''; localStorage.removeItem('cad_token'); }
+  if(s.setup_required){
+    $('#authMsg').textContent='No passkey enrolled. Create one — only your device (Touch/Face ID / security key) can unlock it.';
+    $('#btnEnroll').classList.remove('hide');
+    if(s.bootstrap_required) $('#bootstrap').classList.remove('hide');
+  } else { $('#authMsg').textContent='Sealed. Unlock with your passkey.'; $('#btnLogin').classList.remove('hide'); }
+}
+window.enroll = async ()=>{ try{
+  const body={label:'admin passkey', bootstrap:$('#bootstrap').value||''};
+  const r=await fetch('/auth/register/begin',{method:'POST',headers:J(),body:JSON.stringify(body)});
+  if(!r.ok){ toast('enroll failed: '+(await r.text())); return; }
+  const {challenge_id, options}=await r.json();
+  options.challenge=b64uToBuf(options.challenge); options.user.id=b64uToBuf(options.user.id);
+  (options.excludeCredentials||[]).forEach(c=>c.id=b64uToBuf(c.id));
+  const cred=await navigator.credentials.create({publicKey:options});
+  const payload={challenge_id, credential:{id:cred.id, rawId:bufToB64u(cred.rawId), type:cred.type,
+    response:{clientDataJSON:bufToB64u(cred.response.clientDataJSON), attestationObject:bufToB64u(cred.response.attestationObject)}}};
+  const f=await fetch('/auth/register/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const res=await f.json();
+  if(res.ok){ TOKEN=res.token; localStorage.setItem('cad_token',TOKEN); toast('passkey created 🎉'); unlock(); } else toast('enroll error');
+}catch(e){ toast('enroll error: '+e.message); } };
+window.login = async ()=>{ try{
+  const r=await fetch('/auth/login/begin',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  const {challenge_id, options}=await r.json();
+  options.challenge=b64uToBuf(options.challenge); (options.allowCredentials||[]).forEach(c=>c.id=b64uToBuf(c.id));
+  const cred=await navigator.credentials.get({publicKey:options});
+  const payload={challenge_id, credential:{id:cred.id, rawId:bufToB64u(cred.rawId), type:cred.type,
+    response:{clientDataJSON:bufToB64u(cred.response.clientDataJSON), authenticatorData:bufToB64u(cred.response.authenticatorData),
+      signature:bufToB64u(cred.response.signature), userHandle:cred.response.userHandle?bufToB64u(cred.response.userHandle):null}}};
+  const f=await fetch('/auth/login/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const res=await f.json();
+  if(res.ok){ TOKEN=res.token; localStorage.setItem('cad_token',TOKEN); toast('unlocked'); unlock(); } else toast('login failed');
+}catch(e){ toast('login error: '+e.message); } };
+window.logout = ()=>{ TOKEN=''; localStorage.removeItem('cad_token'); location.reload(); };
+
+// An <img> can't send an Authorization header, and putting the session JWT in
+// the URL would leak full printer control into logs/history/Referer. So we mint
+// a short-lived, CAMERA-ONLY ticket and put that in the query string instead.
+window.camReload = async ()=>{
+  const img=$('#cam'); if(!img) return;
+  let q='';
+  try{ const r=await fetch('/auth/ticket',{method:'POST',headers:J(),body:'{}'});
+    if(r.ok){ const t=await r.json(); q='?ticket='+encodeURIComponent(t.ticket)+'&t='+Date.now(); } }
+  catch(e){}
+  img.src='/api/camera/stream'+q;
+};
+
+function unlock(){
+  $('#overlay').classList.add('hide');
+  camReload();
+  initPreview(); initPlate(); loadModels(); startTelemetry(); loadConfig(); pollChatStatus();
+  initPips(); // sets up draggable plate + telemetry PiPs and does first refreshPlate()
+}
+// legacy shim (voice tools reference setStageMode) — no-op now
+let stageMode='object';
+window.setStageMode=(m)=>{ stageMode=m; };
+window.fitView=()=>previewFit();
+window.toggleWire=()=>{ pvWire=!pvWire; if(pvMesh) pvMesh.material.wireframe=pvWire; };
+
+// ── Spinning object PREVIEW (right rail) — auto-rotates 360° ─────────
+let pvScene,pvCam,pvRenderer,pvControls,pvMesh=null,pvInit=false,pvSpin=true,pvWire=false,currentModel=null;
+const PALETTE=[0x76b900,0x00d9ff,0xff6b4a,0xffce54,0xb066ff,0x39d98a];
+function initPreview(){
+  if(pvInit) return; const el=$('#objpreview'); if(!el) return;
+  pvScene=new THREE.Scene(); pvScene.background=new THREE.Color(0x07070d);
+  pvCam=new THREE.PerspectiveCamera(45, 1, 0.1, 5000); pvCam.position.set(80,70,80);
+  pvRenderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+  pvRenderer.setSize(el.clientWidth, el.clientHeight||280); pvRenderer.setPixelRatio(devicePixelRatio);
+  el.appendChild(pvRenderer.domElement);
+  pvControls=new OrbitControls(pvCam, pvRenderer.domElement); pvControls.enableDamping=true; pvControls.enablePan=false;
+  pvScene.add(new THREE.HemisphereLight(0xffffff,0x223344,1.15));
+  const d=new THREE.DirectionalLight(0xffffff,1.4); d.position.set(1,1.5,1); pvScene.add(d);
+  pvInit=true;
+  if(window.ResizeObserver){ new ResizeObserver(()=>pvResize()).observe(el); }
+  (function loop(){ requestAnimationFrame(loop);
+    if(pvSpin && pvMesh) pvMesh.rotation.z += 0.012;   // gentle 360° turntable
+    if(pvControls) pvControls.update();
+    if(pvRenderer) pvRenderer.render(pvScene,pvCam); })();
+}
+function pvResize(){ if(!pvRenderer)return; const el=$('#objpreview'); if(!el.clientWidth)return;
+  pvCam.aspect=el.clientWidth/(el.clientHeight||el.clientWidth); pvCam.updateProjectionMatrix();
+  pvRenderer.setSize(el.clientWidth, el.clientHeight||el.clientWidth); }
+function previewFit(){ if(!pvMesh)return; const box=new THREE.Box3().setFromObject(pvMesh);
+  const c=box.getCenter(new THREE.Vector3()), sz=box.getSize(new THREE.Vector3());
+  const r=Math.max(sz.x,sz.y,sz.z)||50; pvControls.target.set(0,0,0);
+  pvCam.position.set(r*1.7,r*1.3,r*1.7); pvCam.near=r/100; pvCam.far=r*100; pvCam.updateProjectionMatrix(); }
+window.spinToggle=()=>{ pvSpin=!pvSpin; $('#spinBtn').textContent=pvSpin?'⏸ Spin':'▶ Spin'; };
+window.loadModel = async (name)=>{
+  if(!name) return; initPreview(); currentModel=name;
+  document.querySelectorAll('.mitem').forEach(x=>x.classList.toggle('sel',x.dataset.name===name));
+  $('#objName').textContent=''; $('#previewName').textContent=name; const pm=$('#previewNameMob'); if(pm)pm.textContent=name;
+  if(!name.toLowerCase().endsWith('.stl')){ $('#previewName').textContent=name+' (preview = STL only)'; if(pvMesh){ pvScene.remove(pvMesh); pvMesh.geometry.dispose(); pvMesh.material.dispose(); pvMesh=null; } loadMeta(name); return; }
+  try{
+    const r=await fetch('/api/model/'+encodeURIComponent(name),{headers:authHeaders()});
+    if(!r.ok){ toast('load failed'); return; }
+    const geo=new STLLoader().parse(await r.arrayBuffer()); geo.computeVertexNormals(); geo.center();
+    if(pvMesh){ pvScene.remove(pvMesh); pvMesh.geometry.dispose(); pvMesh.material.dispose(); }
+    const mat=new THREE.MeshStandardMaterial({color:PALETTE[0],metalness:.1,roughness:.6,wireframe:pvWire});
+    pvMesh=new THREE.Mesh(geo,mat); pvMesh.rotation.x=-Math.PI/2; pvScene.add(pvMesh);
+    previewFit(); loadMeta(name);
+  }catch(e){ toast('parse error: '+e.message); }
+};
+async function loadMeta(name){ try{ const r=await fetch('/api/model/meta/'+encodeURIComponent(name),{headers:authHeaders()}); const m=await r.json();
+  if(m.bbox){ const t=`${m.bbox.size.map(x=>x.toFixed(0)).join('×')}mm · ~${m.weight_pla_g}g`;
+    $('#previewName').textContent=name+' · '+t; } }catch(e){} }
+
+// ── Model MENU (right rail + mobile sheet) ──────────────────────────
+let MODELS=[];
+function renderMenu(){
+  ['#menu','#menuMob'].forEach(sel=>{ const box=$(sel); if(!box)return; box.innerHTML='';
+    if(!MODELS.length){ box.innerHTML='<span class="muted">No models. Ask the agent to design one.</span>'; return; }
+    MODELS.forEach(m=>{ const it=document.createElement('div'); it.className='mitem'+(currentModel===m.name?' sel':'');
+      it.dataset.name=m.name;
+      it.innerHTML=`<span class="ic">${m.ext==='stl'?'🧊':'📄'}</span>
+        <span class="info"><div class="nm">${m.name}</div><div class="sz">${m.ext.toUpperCase()}${m.size_kb?(' · '+m.size_kb+'kb'):''}</div></span>`;
+      it.onclick=(e)=>{ if(e.target.closest('.add'))return; loadModel(m.name); };
+      const add=document.createElement('button'); add.className='add'; add.textContent='+'; add.title='add to plate';
+      add.onclick=(e)=>{ e.stopPropagation(); addModelToPlate(m.name); };
+      it.appendChild(add); box.appendChild(it); }); });
+}
+window.loadModels = async ()=>{ try{
+  const d=await (await fetch('/api/models',{headers:authHeaders()})).json();
+  MODELS=d.models||[]; renderMenu();
+  const psel=$('#plateAddSel'); if(psel){ psel.innerHTML=''; MODELS.forEach(m=>{ const o=document.createElement('option'); o.value=m.name; o.textContent=m.name; psel.appendChild(o); }); }
+  if(!currentModel && MODELS.length){ const first=(MODELS.find(m=>(m.ext||'').toLowerCase()==='stl'||m.name.toLowerCase().endsWith('.stl'))||MODELS[0]); loadModel(first.name); }
+}catch(e){ toast('models load failed'); } };
+async function addModelToPlate(name){
+  await fetch('/api/plate/add',{method:'POST',headers:J(),body:JSON.stringify({source:name,color:selColor||''})});
+  toast('added '+name+' to plate'); refreshPlate();
+  const pip=$('#platepip'); if(pip && pip.classList.contains('min')){ pip.classList.remove('min'); localStorage.setItem('platepip_min','0'); snapPip(pip,localStorage.getItem('platepip_corner')||'bl',true); }
+}
+window.addCurrentToPlate=async ()=>{ if(!currentModel){toast('pick a model first');return;} addModelToPlate(currentModel); };
+window.recolorPart=(part,color)=>{ if(pvMesh) pvMesh.material.color.set(color); };
+// mobile sheet
+window.openSheet=()=>{ $('#sheet').classList.add('show'); };
+window.closeSheet=()=>{ $('#sheet').classList.remove('show'); };
+
+// ── slice / print (object) ──────────────────────────────────────────
+async function pollJob(jid,label,elSel){ const el=$(elSel||'#jobLog');
+  for(let i=0;i<800;i++){ await new Promise(r=>setTimeout(r,1500));
+    const r=await fetch('/api/job/'+jid,{headers:authHeaders()}); if(!r.ok) break; const j=await r.json();
+    el.innerHTML=`<b>${label}</b> [${j.state}] ${(j.log||[]).slice(-3).join('<br>')}`;
+    if(j.state==='done'){ toast(label+' done'); return j; }
+    if(j.state==='error'){ toast(label+' error: '+(j.error||'').slice(0,60)); return j; } }
+  return null; }
+window.sliceCurrent = async ()=>{ if(!currentModel){ toast('load a model first'); return; }
+  const r=await fetch('/api/slice',{method:'POST',headers:J(),body:JSON.stringify({name:currentModel})});
+  const {job_id}=await r.json(); toast('slicing…'); return pollJob(job_id,'Slice'); };
+window.printCurrent = async ()=>{ if(!currentModel){ toast('load a model first'); return; }
+  if(!confirm('Slice + START a physical print of '+currentModel+'?')) return;
+  const j=await sliceCurrent(); if(!j||j.state!=='done') return;
+  const g=j.result&&(j.result.rel||j.result.gcode); if(!g){ toast('no gcode'); return; }
+  const r=await fetch('/api/print',{method:'POST',headers:J(),body:JSON.stringify({name:g.split('/').pop()})});
+  const {job_id}=await r.json(); pollJob(job_id,'Print'); };
+
+// ── telemetry ───────────────────────────────────────────────────────
+function fmtEta(m){ if(m==null)return'—'; if(m<60)return m+'m'; return Math.floor(m/60)+'h '+(m%60)+'m'; }
+async function poll(){ try{
+  const r=await fetch('/api/telemetry',{headers:authHeaders()}); if(r.status===401){ logout(); return; }
+  const s=await r.json();
+  $('#statusDot').classList.toggle('on', !!s.connected);
+  $('#serialPill').textContent=s.serial||'cockpit'; $('#statePill').textContent=s.gcode_state||'—';
+  // telemetry PiP mini-title mirrors the live state (was stuck on 'telemetry')
+  {const gs=s.gcode_state; const mini=$('#statePillMini');
+   mini.textContent=gs?gs.toLowerCase():'idle';
+   mini.style.color=gs==='RUNNING'?'var(--ok)':gs==='FAILED'?'var(--hot)':gs==='PAUSE'?'var(--warn)':'var(--dim)';}
+  $('#job').textContent=s.subtask_name||'—'; $('#pct').textContent=(s.progress!=null?s.progress+'%':'—');
+  $('#barFill').style.width=(s.progress||0)+'%';
+  $('#barFill').style.background = s.gcode_state==='FAILED' ? 'var(--hot)'
+        : (s.progress>=100 ? 'var(--ok)' : 'linear-gradient(90deg,var(--accent),var(--accent2))');
+  $('#layer').textContent=(s.layer!=null?s.layer+' / '+(s.total_layers||'?'):'—');
+  $('#eta').textContent=fmtEta(s.remaining_min);
+  const sd=$('#sdcard'); if(s.sdcard===false){ sd.textContent='⚠️ none'; sd.style.color='var(--hot)'; }
+  else if(s.sdcard===true){ sd.textContent='✓ ready'; sd.style.color='var(--ok)'; } else { sd.textContent='—'; sd.style.color=''; }
+  const t=s.temps||{};
+  $('#tN').textContent=t.nozzle!=null?Math.round(t.nozzle):'—'; $('#tNt').textContent='/ '+(t.nozzle_target!=null?Math.round(t.nozzle_target):'—');
+  $('#tB').textContent=t.bed!=null?Math.round(t.bed):'—'; $('#tBt').textContent='/ '+(t.bed_target!=null?Math.round(t.bed_target):'—');
+  $('#tC').textContent=t.chamber!=null?Math.round(t.chamber):'—';
+  const ams=s.ams||[]; const box=$('#ams');
+  if(ams.length){ box.innerHTML=''; ams.forEach(u=>u.slots.forEach(sl=>{
+    const col=sl.color?('#'+String(sl.color).slice(0,6)):'#333'; const pc=sl.remaining_pct!=null?sl.remaining_pct:0;
+    box.insertAdjacentHTML('beforeend',`<div class="slot" title="${sl.material||''} ${pc}%"><div class="fill" style="height:${pc}%;background:${col}"></div><div class="pc">${pc}%</div></div>`); })); }
+  else { renderFilamentSlots(); }
+  $('#camRes').textContent=(s.gcode_state==='RUNNING'?'printing':'idle');
+}catch(e){} }
+let _tmr=null; function startTelemetry(){ if(_tmr)return; poll(); _tmr=setInterval(poll,2000); }
+window.ctl = async (action)=>{ if(action==='stop'&&!confirm('Stop the print?'))return;
+  const r=await fetch('/api/control',{method:'POST',headers:J(),body:JSON.stringify({action})}); toast(r.ok?(action+' sent'):'control failed'); };
+// show configured filaments when no live AMS
+let FILAMENTS=[];
+function renderFilamentSlots(){ const box=$('#ams'); if(!FILAMENTS.length){ box.innerHTML='<span class="muted">no AMS</span>'; return; }
+  box.innerHTML=''; FILAMENTS.forEach(f=>{ box.insertAdjacentHTML('beforeend',
+    `<div><div class="slot" title="${f.name} (${f.type})"><div class="fill" style="height:100%;background:${f.color}"></div></div><div class="noz">N${f.nozzle}</div></div>`); }); }
+
+// ── chat (dock) ─────────────────────────────────────────────────────
+function addMsg(cls,text){ const d=document.createElement('div'); d.className='msg '+cls; d.textContent=text;
+  $('#chatlog').appendChild(d); $('#chatlog').scrollTop=1e9; return d; }
+window.addMsg=addMsg;
+async function pollChatStatus(){ try{ const s=await (await fetch('/api/chat/status',{headers:authHeaders()})).json();
+  $('#statePill').title=s.ready?`${s.tools} tools`:''; }catch(e){} }
+window.sendChat = async ()=>{ const inp=$('#chatInput'); const q=inp.value.trim(); if(!q)return; inp.value='';
+  addMsg('u',q); const wait=addMsg('a','…'); wait.classList.add('thinking');
+  const sb=$('.sendbtn'); if(sb){sb.disabled=true;} inp.disabled=true;
+  try{ const d=await (await fetch('/api/chat',{method:'POST',headers:J(),body:JSON.stringify({prompt:q})})).json();
+    wait.textContent=d.reply||('reply error: '+(d.error||'no reply')); }
+  catch(e){ wait.textContent='error: '+e.message; }
+  finally{ wait.classList.remove('thinking'); if(sb){sb.disabled=false;} inp.disabled=false; inp.focus(); }
+  loadModels(); refreshPlate(); };
+
+// ── voice (OpenAI Realtime over WebRTC) with transcript display ───────
+let pc=null, dc=null, micStream=null, voiceOn=false;
+window.toggleVoice = async ()=>{ if(voiceOn){ stopVoice(); return; } await startVoice(); };
+async function startVoice(){
+  $('#voiceStatus').textContent='requesting ephemeral token…';
+  let cfg; try{ const r=await fetch('/api/realtime/token',{method:'POST',headers:authHeaders()});
+    cfg=await r.json(); if(!r.ok){ $('#voiceStatus').textContent='⚠️ '+(cfg.error||'token failed'); return; } }
+  catch(e){ $('#voiceStatus').textContent='⚠️ '+e.message; return; }
+  const EK=cfg.client_secret; if(!EK){ $('#voiceStatus').textContent='⚠️ no client secret'; return; }
+  try{
+    pc=new RTCPeerConnection(); const audioEl=new Audio(); audioEl.autoplay=true;
+    pc.ontrack=e=>{ audioEl.srcObject=e.streams[0]; };
+    micStream=await navigator.mediaDevices.getUserMedia({audio:true});
+    micStream.getTracks().forEach(t=>pc.addTrack(t,micStream));
+    dc=pc.createDataChannel('oai-events'); dc.onmessage=onVoiceEvent;
+    dc.onopen=()=>{ $('#voiceStatus').textContent='🎙️ live — speak naturally'; };
+    const offer=await pc.createOffer(); await pc.setLocalDescription(offer);
+    const resp=await fetch('https://api.openai.com/v1/realtime/calls',{method:'POST', body:offer.sdp,
+      headers:{'Authorization':'Bearer '+EK,'Content-Type':'application/sdp'}});
+    const answerSdp=await resp.text();
+    if(!resp.ok){ throw new Error('realtime/calls '+resp.status+': '+answerSdp.slice(0,200)); }
+    await pc.setRemoteDescription({type:'answer', sdp:answerSdp});
+    voiceOn=true; $('#micBtn').classList.add('live'); $('#voiceOrb').classList.add('live');
+  }catch(e){ $('#voiceStatus').textContent='⚠️ '+e.message; stopVoice(); }
+}
+function stopVoice(){ voiceOn=false; $('#micBtn').classList.remove('live'); $('#voiceOrb').classList.remove('live'); $('#voiceStatus').textContent='';
+  try{dc&&dc.close();}catch(e){} try{pc&&pc.close();}catch(e){} try{micStream&&micStream.getTracks().forEach(t=>t.stop());}catch(e){} pc=dc=micStream=null; }
+window.stopVoice=stopVoice;
+// realtime events: transcripts + tool calls streamed into the dock
+let _vUserMsg=null, _vAsstMsg=null;
+async function onVoiceEvent(ev){ let m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
+  switch(m.type){
+    case 'conversation.item.input_audio_transcription.delta':
+      if(!_vUserMsg) _vUserMsg=addMsg('u',''); _vUserMsg.textContent+=m.delta||''; $('#chatlog').scrollTop=1e9; break;
+    case 'conversation.item.input_audio_transcription.completed':
+      if(_vUserMsg){ _vUserMsg.textContent=m.transcript||_vUserMsg.textContent; } _vUserMsg=null; break;
+    case 'response.audio_transcript.delta':
+      if(!_vAsstMsg) _vAsstMsg=addMsg('voice',''); _vAsstMsg.textContent+=m.delta||''; $('#chatlog').scrollTop=1e9; break;
+    case 'response.audio_transcript.done':
+      if(_vAsstMsg){ _vAsstMsg.textContent=m.transcript||_vAsstMsg.textContent; } _vAsstMsg=null; break;
+    case 'response.function_call_arguments.done':{
+      const name=m.name; let args={}; try{ args=JSON.parse(m.arguments||'{}'); }catch(e){}
+      addMsg('tool','⚙ '+name+'('+Object.values(args).slice(0,3).join(', ')+')');
+      const out=await dispatchVoiceTool(name,args);
+      dc.send(JSON.stringify({type:'conversation.item.create',item:{type:'function_call_output',call_id:m.call_id,output:JSON.stringify(out)}}));
+      dc.send(JSON.stringify({type:'response.create'})); break; }
+  }
+}
+async function dispatchVoiceTool(name,args){ try{
+  if(name==='load_model'){ await loadModel(args.name); return {ok:true}; }
+  if(name==='recolor_part'){ recolorPart(args.part||'all', args.color); return {ok:true}; }
+  if(name==='slice_model'){ const {job_id}=await (await fetch('/api/slice',{method:'POST',headers:J(),body:JSON.stringify({name:args.name,profile:args.profile||''})})).json(); const j=await pollJob(job_id,'Slice'); return {ok:j&&j.state==='done', job:j}; }
+  if(name==='print_model'){ const {job_id}=await (await fetch('/api/print',{method:'POST',headers:J(),body:JSON.stringify({name:args.name})})).json(); const j=await pollJob(job_id,'Print'); return {ok:j&&j.state==='done', job:j}; }
+  if(name==='printer_status'){ return await (await fetch('/api/telemetry',{headers:authHeaders()})).json(); }
+  if(name==='control_print'){ await fetch('/api/control',{method:'POST',headers:J(),body:JSON.stringify({action:args.action})}); return {ok:true}; }
+  if(name==='plate_add'){ await fetch('/api/plate/add',{method:'POST',headers:J(),body:JSON.stringify({source:args.source,color:args.color||''})}); setStageMode('plate'); refreshPlate(); return {ok:true}; }
+  if(name==='plate_recolor'){ await fetch('/api/plate/recolor',{method:'POST',headers:J(),body:JSON.stringify({id:args.item||'all',color:args.color})}); refreshPlate(); return {ok:true}; }
+  if(name==='plate_arrange'){ await fetch('/api/plate/arrange',{method:'POST',headers:J(),body:'{}'}); refreshPlate(); return {ok:true}; }
+  if(name==='plate_list'){ return await (await fetch('/api/plate',{headers:authHeaders()})).json(); }
+  if(name==='plate_clear'){ await fetch('/api/plate/clear',{method:'POST',headers:authHeaders()}); refreshPlate(); return {ok:true}; }
+  if(name==='plate_print'){ if(!args.confirm) return {ok:false,note:'set confirm=true to start physical print'}; await platePrint(); return {ok:true,started:true}; }
+  if(name==='telegram_notify'){ return await (await fetch('/api/telegram/notify',{method:'POST',headers:J(),body:JSON.stringify({text:args.text})})).json(); }
+  if(name==='ask_cad_agent'){ const d=await (await fetch('/api/chat',{method:'POST',headers:J(),body:JSON.stringify({prompt:args.request})})).json(); loadModels(); return {reply:d.reply||d.error}; }
+}catch(e){ return {ok:false,error:e.message}; }
+  return {ok:false,error:'unknown tool '+name}; }
+// ── PLATE scene (multi-item, per-item colors, palette snap) ─────────────────
+let pScene,pCam,pRenderer,pControls,pMeshes={},pInit=false,PLATE_PAL=[],selColor=null;
+function initPlate(){ if(pInit) return; const el=$('#plateView'); if(!el) return;
+  pScene=new THREE.Scene(); pScene.background=new THREE.Color(0x07070d);
+  pCam=new THREE.PerspectiveCamera(50, el.clientWidth/(el.clientHeight||1),0.1,5000); pCam.position.set(220,220,260);
+  pRenderer=new THREE.WebGLRenderer({antialias:true}); pRenderer.setSize(el.clientWidth,el.clientHeight||300);
+  pRenderer.setPixelRatio(devicePixelRatio); el.appendChild(pRenderer.domElement);
+  pControls=new OrbitControls(pCam,pRenderer.domElement); pControls.enableDamping=true;
+  pScene.add(new THREE.HemisphereLight(0xffffff,0x223344,1.1));
+  const d=new THREE.DirectionalLight(0xffffff,1.3); d.position.set(1,1.5,1); pScene.add(d);
+  pInit=true;
+  if(window.ResizeObserver){ new ResizeObserver(()=>pResize()).observe(el); }
+  setupPlateDrag(el);
+  (function loop(){ requestAnimationFrame(loop); if(pControls){pControls.update(); pRenderer.render(pScene,pCam);} })();
+}
+
+// ── drag objects around the bed (raycast onto the XY build plane) ───────
+let pSelId=null, pDragging=false;
+const _ray=new THREE.Raycaster(), _ndc=new THREE.Vector2();
+const _plane=new THREE.Plane(new THREE.Vector3(0,0,1),0); // bed plane z=0 (models sit on XY)
+const _hit=new THREE.Vector3(), _off=new THREE.Vector3();
+function setupPlateDrag(el){
+  function ndc(e){ const r=el.getBoundingClientRect(); const t=e.touches?e.touches[0]:e;
+    _ndc.x=((t.clientX-r.left)/r.width)*2-1; _ndc.y=-((t.clientY-r.top)/r.height)*2+1; }
+  function pick(){ _ray.setFromCamera(_ndc,pCam);
+    const hits=_ray.intersectObjects(Object.values(pMeshes),true); return hits[0]; }
+  function down(e){ ndc(e); const h=pick();
+    if(h){ let o=h.object; while(o && !pMeshes[o.name]) o=o.parent; if(!o) return;
+      pSelId=o.name; selectPlateItem(pSelId); pDragging=true; pControls.enabled=false;
+      _ray.setFromCamera(_ndc,pCam); _ray.ray.intersectPlane(_plane,_hit); _off.copy(o.position).sub(_hit); _off.z=0;
+      e.preventDefault(); } }
+  function move(e){ if(!pDragging||!pSelId)return; ndc(e); _ray.setFromCamera(_ndc,pCam);
+    if(_ray.ray.intersectPlane(_plane,_hit)){ const m=pMeshes[pSelId];
+      m.position.x=_hit.x+_off.x; m.position.y=_hit.y+_off.y; } e.preventDefault(); }
+  function up(){ if(!pDragging)return; pDragging=false; pControls.enabled=true;
+    if(pSelId&&pMeshes[pSelId]){ const m=pMeshes[pSelId];
+      fetch('/api/plate/update',{method:'POST',headers:J(),body:JSON.stringify({id:pSelId,position:[m.position.x,m.position.y,m.position.z]})}); } }
+  el.addEventListener('mousedown',down); el.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+  el.addEventListener('touchstart',down,{passive:false}); el.addEventListener('touchmove',move,{passive:false}); window.addEventListener('touchend',up);
+}
+function selectPlateItem(id){ pSelId=id;
+  Object.entries(pMeshes).forEach(([k,m])=>{ if(m.material&&m.material.emissive) m.material.emissive.setHex(k===id?0x224400:0x000000); });
+  document.querySelectorAll('.pitem').forEach(x=>x.classList.toggle('sel',x.dataset.id===id)); }
+function pResize(){ if(!pRenderer)return; const el=$('#plateView'); if(!el.clientHeight)return;
+  pCam.aspect=el.clientWidth/el.clientHeight; pCam.updateProjectionMatrix(); pRenderer.setSize(el.clientWidth,el.clientHeight); }
+// realistic solid build plate that mirrors the physical bed (size + laser tint)
+function drawBed(bed,opts){ opts=opts||{}; const old=pScene.getObjectByName('__bed'); if(old) pScene.remove(old);
+  const W=bed[0]||256, D=bed[1]||256, H=bed[2]||256;
+  const g=new THREE.Group(); g.name='__bed';
+  // solid plate slab (textured PEI-like surface), laser bed gets a darker graphite tint
+  const surfCol = opts.has_laser ? 0x23262b : 0x2a2d33;
+  const slab=new THREE.Mesh(new THREE.BoxGeometry(W,6,D),
+    new THREE.MeshStandardMaterial({color:surfCol,metalness:.35,roughness:.75}));
+  slab.position.set(0,-3,0); slab.rotation.x=0; g.add(slab);
+  // top face lies in XZ; rotate group so Z(model up) maps to Y — meshes use position[2] as height
+  // grid on the surface
+  const gridMax=Math.max(W,D);
+  const grid=new THREE.GridHelper(gridMax,Math.round(gridMax/20),0x4b7a12,0x1c2412);
+  grid.position.y=0.2; g.add(grid);
+  // green build-area outline (like Bambu/Prusa)
+  const edgeGeo=new THREE.EdgesGeometry(new THREE.BoxGeometry(W,0.5,D));
+  const edge=new THREE.LineSegments(edgeGeo,new THREE.LineBasicMaterial({color:0x76b900}));
+  edge.position.y=0.3; g.add(edge);
+  // build volume cage (shows Z height)
+  const cage=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(W,H,D)),
+    new THREE.LineBasicMaterial({color:0x2c3550,transparent:true,opacity:.4}));
+  cage.position.y=H/2; g.add(cage);
+  // origin marker (front-left corner) — small axis
+  const ax=new THREE.AxesHelper(Math.min(W,D)*0.12); ax.position.set(-W/2,0.5,D/2); g.add(ax);
+  // laser badge plane if this printer has a laser module
+  if(opts.has_laser){ const lc=new THREE.Mesh(new THREE.CircleGeometry(Math.min(W,D)*0.04,24),
+      new THREE.MeshBasicMaterial({color:0xff3b6b,transparent:true,opacity:.6}));
+    lc.rotation.x=-Math.PI/2; lc.position.set(W/2-20,0.6,-D/2+20); g.add(lc); }
+  // rotate whole bed so model-space Z(up) aligns: our meshes place height on position[2] then rotate — keep XY plane as bed
+  g.rotation.x=-Math.PI/2; // lay slab flat: box Y(thickness)→world Z, so bed sits in XY like the models
+  pScene.add(g);
+  // frame camera to the bed once
+  if(!drawBed._framed){ drawBed._framed=true; const d=Math.max(W,D);
+    pCam.position.set(d*0.9,d*0.9,d*1.05); pControls.target.set(0,0,H*0.25); pControls.update(); }
+}
+window.refreshPlate = async ()=>{ initPlate();
+  try{
+    const st=await (await fetch('/api/plate',{headers:authHeaders()})).json();
+    $('#plateBed').textContent=(st.bed||[]).slice(0,2).join('×')+'mm'+(st.has_laser?' · laser':'');
+    drawBed(st.bed||[256,256,256],{has_laser:st.has_laser,model:st.model,nozzle_count:st.nozzle_count});
+    try{ const lv=await (await fetch('/api/filaments/live',{headers:authHeaders()})).json();
+      PLATE_PAL=(lv.filaments&&lv.filaments.length)?lv.filaments:(st.palette||[]); }
+    catch(e){ PLATE_PAL=st.palette||[]; }
+    renderPalette();
+    const seen=new Set();
+    for(const it of (st.items||[])){ seen.add(it.id);
+      if(!pMeshes[it.id]){ let geo;
+        if(it.source.toLowerCase().endsWith('.stl')){
+          const rr=await fetch('/api/model/'+encodeURIComponent(it.source),{headers:authHeaders()});
+          geo=new STLLoader().parse(await rr.arrayBuffer()); geo.computeVertexNormals(); geo.center(); }
+        else { geo=new THREE.BoxGeometry(30,30,30); }
+        const mat=new THREE.MeshStandardMaterial({color:it.color,metalness:.1,roughness:.6,emissive:0x000000});
+        const mesh=new THREE.Mesh(geo,mat); mesh.name=it.id; pScene.add(mesh); pMeshes[it.id]=mesh; }
+      const m=pMeshes[it.id]; m.material.color.set(it.color);
+      m.position.set(it.position[0],it.position[1],it.position[2]);
+      m.rotation.set(0,0,(it.rotation?it.rotation[2]:0)*Math.PI/180); m.scale.setScalar(it.scale||1); }
+    for(const id of Object.keys(pMeshes)){ if(!seen.has(id)){ pScene.remove(pMeshes[id]); delete pMeshes[id]; } }
+    // fit
+    const items=st.items||[];
+    if(items.length){ const box=new THREE.Box3(); Object.values(pMeshes).forEach(m=>box.expandByObject(m));
+      if(!box.isEmpty()){ const c=box.getCenter(new THREE.Vector3()); pControls.target.copy(c); } }
+    buildPlateItems(items);
+  }catch(e){ console.warn(e); } };
+function renderPalette(){ const box=$('#palette'); if(!box) return; box.innerHTML='';
+  PLATE_PAL.forEach(f=>{ const chip=document.createElement('div'); chip.className='chip'+(selColor===f.color?' sel':'');
+    const rem=(f.remaining_pct!=null)?`<span class="rem">${f.remaining_pct}%</span>`:'';
+    const src=f.source==='ams'?'AMS':(f.source==='external'?'EXT':'');
+    chip.innerHTML=`<div class="sw" style="background:${f.color}">${rem}</div><span>${f.type} N${f.nozzle}</span>${src?`<span class="src">${src}</span>`:''}`;
+    chip.title=`${f.name} · nozzle ${f.nozzle}${f.source?(' · '+f.source):''}`;
+    chip.onclick=()=>{ selColor=(selColor===f.color?null:f.color); renderPalette(); toast(selColor?('paint = '+f.name):'paint off'); };
+    box.appendChild(chip); });
+  if(!PLATE_PAL.length) box.innerHTML='<span class="muted">No filaments loaded. Insert filament in AMS, then ↻ AMS.</span>'; }
+window.syncAMS=async ()=>{ try{ const r=await (await fetch('/api/filaments/sync',{method:'POST',headers:authHeaders()})).json();
+  if(r.ok){ PLATE_PAL=r.filaments; renderPalette(); toast('synced '+r.count+' filament(s) from AMS'); loadConfig&&loadConfig(); }
+  else toast('no filaments in AMS'); }catch(e){ toast('sync failed'); } };
+function buildPlateItems(items){ const box=$('#plateItems');
+  if(!items.length){ box.innerHTML='<span class="muted">Plate is empty. Add models from the menu →</span>'; return; }
+  box.innerHTML='';
+  items.forEach(it=>{ const card=document.createElement('div'); card.className='pitem'+(pSelId===it.id?' sel':''); card.dataset.id=it.id;
+    // header: color + name + delete
+    const head=document.createElement('div'); head.className='pitemhead';
+    const pick=document.createElement('input'); pick.type='color'; pick.value=it.color; pick.oninput=()=>plateRecolor(it.id,pick.value);
+    const label=document.createElement('span'); label.className='pn'; label.textContent=it.name;
+    label.onclick=()=>{ selectPlateItem(it.id); if(selColor){ plateRecolor(it.id,selColor); pick.value=selColor; } };
+    const del=document.createElement('button'); del.textContent='✕'; del.className='iconbtn'; del.style.flex='0'; del.style.minWidth='30px'; del.onclick=()=>plateRemove(it.id);
+    head.appendChild(pick); head.appendChild(label); head.appendChild(del); card.appendChild(head);
+    // scale slider
+    const sc=(it.scale!=null?it.scale:1);
+    const scRow=document.createElement('div'); scRow.className='ctlrow';
+    scRow.innerHTML=`<span class="cl">Size</span>`;
+    const scR=document.createElement('input'); scR.type='range'; scR.min='0.25'; scR.max='3'; scR.step='0.05'; scR.value=sc;
+    const scV=document.createElement('span'); scV.className='cv'; scV.textContent=Math.round(sc*100)+'%';
+    scR.oninput=()=>{ scV.textContent=Math.round(scR.value*100)+'%'; if(pMeshes[it.id])pMeshes[it.id].scale.setScalar(parseFloat(scR.value)); };
+    scR.onchange=()=>plateUpdate(it.id,{scale:parseFloat(scR.value)});
+    scRow.appendChild(scR); scRow.appendChild(scV); card.appendChild(scRow);
+    // rotate slider (Z)
+    const rz=(it.rotation&&it.rotation[2]!=null?it.rotation[2]:0);
+    const rRow=document.createElement('div'); rRow.className='ctlrow';
+    rRow.innerHTML=`<span class="cl">Turn</span>`;
+    const rR=document.createElement('input'); rR.type='range'; rR.min='0'; rR.max='360'; rR.step='5'; rR.value=rz;
+    const rV=document.createElement('span'); rV.className='cv'; rV.textContent=rz+'°';
+    rR.oninput=()=>{ rV.textContent=rR.value+'°'; if(pMeshes[it.id])pMeshes[it.id].rotation.z=rR.value*Math.PI/180; };
+    rR.onchange=()=>plateUpdate(it.id,{rotation:[0,0,parseFloat(rR.value)]});
+    rRow.appendChild(rR); rRow.appendChild(rV); card.appendChild(rRow);
+    card.onclick=(e)=>{ if(e.target===card||e.target===label) selectPlateItem(it.id); };
+    box.appendChild(card); }); }
+window.plateUpdate=async (id,patch)=>{ await fetch('/api/plate/update',{method:'POST',headers:J(),body:JSON.stringify({id,...patch})}); };
+window.plateAddSelected=async ()=>{ const name=$('#plateAddSel').value; if(!name)return;
+  await fetch('/api/plate/add',{method:'POST',headers:J(),body:JSON.stringify({source:name,color:selColor||''})}); refreshPlate(); };
+window.plateRecolor=async (id,color)=>{ await fetch('/api/plate/recolor',{method:'POST',headers:J(),body:JSON.stringify({id,color})}); if(pMeshes[id])pMeshes[id].material.color.set(color); };
+window.plateRemove=async (id)=>{ await fetch('/api/plate/remove',{method:'POST',headers:J(),body:JSON.stringify({id})}); refreshPlate(); };
+window.plateClear=async ()=>{ if(!confirm('Clear the plate?'))return; await fetch('/api/plate/clear',{method:'POST',headers:authHeaders()}); refreshPlate(); };
+window.plateArrange=async ()=>{ await fetch('/api/plate/arrange',{method:'POST',headers:J(),body:'{}'}); refreshPlate(); toast('arranged'); };
+window.plateExport=async ()=>{ const d=await (await fetch('/api/plate/export',{method:'POST',headers:authHeaders()})).json(); toast(d.ok?('exported '+d.rel+' ('+d.objects+' parts)'):('⚠️ '+(d.error||'export failed'))); return d; };
+window.plateSlice=async ()=>{ const e=await plateExport(); if(!e.ok)return; const {job_id}=await (await fetch('/api/slice',{method:'POST',headers:J(),body:JSON.stringify({name:e.rel})})).json(); pollJob(job_id,'Slice','#plateJob'); };
+window.platePrint=async ()=>{ const st=await (await fetch('/api/plate',{headers:authHeaders()})).json();
+  if(!(st.items||[]).length){ toast('plate empty'); return; }
+  if(!confirm('Slice + START a physical print of the colored plate ('+st.items.length+' parts)?'))return;
+  const e=await plateExport(); if(!e.ok)return;
+  const {job_id}=await (await fetch('/api/slice',{method:'POST',headers:J(),body:JSON.stringify({name:e.rel})})).json();
+  const j=await pollJob(job_id,'Slice','#plateJob'); if(!j||j.state!=='done')return;
+  const g=j.result&&(j.result.rel||j.result.gcode); if(!g){toast('no gcode');return;}
+  const {job_id:pj}=await (await fetch('/api/print',{method:'POST',headers:J(),body:JSON.stringify({name:g.split('/').pop()})})).json(); pollJob(pj,'Print','#plateJob'); };
+
+// ── config drawer ────────────────────────────────────────────────────
+window.openConfig=()=>{ $('#configDrawer').classList.remove('hide'); loadConfig(); tgRefresh(); };
+window.closeConfig=()=>{ $('#configDrawer').classList.add('hide'); };
+let CFG_FILAMENTS=[];
+async function loadConfig(){ try{
+  const c=await (await fetch('/api/config',{headers:authHeaders()})).json();
+  for(const k of ['ip','serial','model','workdir','voice_model','voice_name','slice_profile','printer_model','cam_fps','cam_quality','nozzle_count']){
+    const el=$('#cfg_'+k); if(el && c[k]!=null) el.value=c[k]; }
+  $('#acSet').textContent=c.access_code_set?'✓ set':'(not set)';
+  $('#oaSet').textContent=c.openai_api_key_set?'✓ set':'(not set)';
+  const f=await (await fetch('/api/filaments',{headers:authHeaders()})).json();
+  CFG_FILAMENTS=f.filaments||[]; FILAMENTS=CFG_FILAMENTS; renderFilamentSlots(); renderCfgFilaments();
+}catch(e){} }
+function renderCfgFilaments(){ const box=$('#cfgFilaments'); box.innerHTML='';
+  CFG_FILAMENTS.forEach((f,i)=>{ const row=document.createElement('div'); row.className='prow';
+    const col=document.createElement('input'); col.type='color'; col.value=f.color; col.oninput=()=>{f.color=col.value;};
+    const nm=document.createElement('input'); nm.value=f.name; nm.placeholder='name'; nm.style.flex='2'; nm.oninput=()=>{f.name=nm.value;};
+    const ty=document.createElement('input'); ty.value=f.type; ty.placeholder='PLA'; ty.style.flex='1'; ty.style.minWidth='60px'; ty.oninput=()=>{f.type=ty.value;};
+    const nz=document.createElement('select'); nz.style.flex='0';nz.style.minWidth='60px'; nz.innerHTML='<option value="0">N0</option><option value="1">N1</option>'; nz.value=String(f.nozzle||0); nz.onchange=()=>{f.nozzle=parseInt(nz.value);};
+    const del=document.createElement('button'); del.textContent='✕'; del.className='iconbtn'; del.style.flex='0';del.style.minWidth='34px'; del.onclick=()=>{CFG_FILAMENTS.splice(i,1);renderCfgFilaments();};
+    row.appendChild(col);row.appendChild(nm);row.appendChild(ty);row.appendChild(nz);row.appendChild(del); box.appendChild(row); });
+  if(!CFG_FILAMENTS.length) box.innerHTML='<span class="muted">No filaments configured.</span>'; }
+window.addFilamentRow=()=>{ CFG_FILAMENTS.push({slot:CFG_FILAMENTS.length+1,name:'New',type:'PLA',color:'#cccccc',nozzle:0}); renderCfgFilaments(); };
+window.saveConfig = async ()=>{ const patch={};
+  for(const k of ['ip','serial','model','workdir','voice_model','voice_name','slice_profile','printer_model']){ patch[k]=$('#cfg_'+k).value; }
+  patch.cam_fps=parseInt($('#cfg_cam_fps').value||'15'); patch.cam_quality=parseInt($('#cfg_cam_quality').value||'5');
+  patch.nozzle_count=parseInt($('#cfg_nozzle_count').value||'2');
+  const ac=$('#cfg_access_code').value; if(ac) patch.access_code=ac;
+  const oa=$('#cfg_openai_api_key').value; if(oa) patch.openai_api_key=oa;
+  CFG_FILAMENTS.forEach((f,i)=>f.slot=i+1); patch.filaments=CFG_FILAMENTS;
+  const r=await fetch('/api/config',{method:'POST',headers:J(),body:JSON.stringify(patch)});
+  if(r.ok){ toast('config saved & applied'); $('#cfg_access_code').value=''; $('#cfg_openai_api_key').value=''; loadConfig(); refreshPlate();
+    camReload(); }
+  else toast('save failed'); };
+
+// ── telegram ─────────────────────────────────────────────────────────
+async function tgRefresh(){ try{ const s=await (await fetch('/api/telegram/status',{headers:authHeaders()})).json();
+  $('#tgStatus').textContent=s.configured?`bot ok · chat ${s.chat_id||'?'} · polling ${s.polling}`:'not configured'; }catch(e){} }
+window.tgTest=async ()=>{ const r=await (await fetch('/api/telegram/notify',{method:'POST',headers:J(),body:JSON.stringify({text:'🔧 cockpit test message'})})).json(); toast(r.ok?'sent ✓':('⚠️ '+(r.error||'failed'))); };
+window.tgDetect=async ()=>{ const r=await (await fetch('/api/telegram/detect',{headers:authHeaders()})).json();
+  if(r.recent_chats&&r.recent_chats.length){ toast('chat id: '+r.recent_chats[0].id); }
+  else toast('message @your_bot once, then retry'); };
+window.tgRefresh=tgRefresh;
+
+// ── Floating PiP manager: drag + iPhone-style corner snapping ───────────
+const MARGIN=16;
+// top-docked pips need extra clearance so a finger can reach ABOVE them to pull down
+function safeTop(){const v=getComputedStyle(document.documentElement).getPropertyValue('--safe-t').trim();const n=parseInt(v)||0;return n;}
+function topMargin(){return Math.max(48, safeTop()+44);}
+function pipCorner(pip){ // returns nearest corner key from current center
+  const r=pip.getBoundingClientRect(); const cx=r.left+r.width/2, cy=r.top+r.height/2;
+  const h=cy < window.innerHeight/2 ? 't':'b'; const v=cx < window.innerWidth/2 ? 'l':'r';
+  return h+v; }
+function snapPip(pip,corner,animate=true){
+  const key=pip.id+'_corner'; localStorage.setItem(key,corner);
+  if(!animate) pip.style.transition='none';
+  const w=pip.offsetWidth,hh=pip.offsetHeight;
+  const bottomGap=getDockH()+MARGIN;
+  const x=corner.includes('l')?MARGIN:(window.innerWidth-w-MARGIN);
+  const y=corner.includes('t')?topMargin():(window.innerHeight-hh-bottomGap);
+  pip.style.left=x+'px';pip.style.top=y+'px';pip.style.right='auto';pip.style.bottom='auto';
+  if(!animate) requestAnimationFrame(()=>pip.style.transition='');
+}
+function getDockH(){ const d=document.getElementById('dock'); if(!d) return 90;
+  const mob=window.matchMedia('(max-width:760px)').matches;
+  if(mob){ // PiPs must clear the glass sheet; but if sheet is tall (half/full) just clamp so pips stay visible up top
+    const h=d.offsetHeight; return Math.min(h, Math.round(window.innerHeight*0.42)); }
+  return d.classList.contains('collapsed')?60:Math.min(d.offsetHeight,window.innerHeight*0.5); }
+function showSnapZones(active){ ['tl','tr','bl','br'].forEach(c=>{
+  const z=document.getElementById('sz-'+c); if(!z)return;
+  z.style.left=c.includes('l')?MARGIN+'px':'auto'; z.style.right=c.includes('r')?MARGIN+'px':'auto';
+  z.style.top=c.includes('t')?topMargin()+'px':'auto'; z.style.bottom=c.includes('b')?(getDockH()+MARGIN)+'px':'auto';
+  z.classList.toggle('show',active===c); }); }
+function hideSnapZones(){ ['tl','tr','bl','br'].forEach(c=>document.getElementById('sz-'+c)?.classList.remove('show')); }
+
+function makePipDraggable(pip){
+  if(!pip) return; let dragging=false,sx=0,sy=0,ox=0,oy=0,moved=false;
+  const handle=pip.querySelector('[data-drag]')||pip;
+  function down(e){ if(pip.classList.contains('full'))return; if(e.target.closest('.pipbtns'))return;
+    dragging=true;moved=false;pip.classList.add('dragging');
+    const t=e.touches?e.touches[0]:e; sx=t.clientX;sy=t.clientY;
+    const r=pip.getBoundingClientRect(); ox=r.left;oy=r.top; e.preventDefault(); }
+  function move(e){ if(!dragging)return; const t=e.touches?e.touches[0]:e;
+    const dx=t.clientX-sx,dy=t.clientY-sy; if(Math.abs(dx)+Math.abs(dy)>3)moved=true;
+    let nx=Math.max(4,Math.min(window.innerWidth-pip.offsetWidth-4,ox+dx));
+    let ny=Math.max(4,Math.min(window.innerHeight-pip.offsetHeight-4,oy+dy));
+    pip.style.left=nx+'px';pip.style.top=ny+'px';pip.style.right='auto';pip.style.bottom='auto';
+    showSnapZones(pipCorner(pip)); }
+  function up(){ if(!dragging)return; dragging=false;pip.classList.remove('dragging');
+    hideSnapZones(); snapPip(pip,pipCorner(pip),true); }
+  handle.addEventListener('mousedown',down); window.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+  handle.addEventListener('touchstart',down,{passive:false}); window.addEventListener('touchmove',move,{passive:false}); window.addEventListener('touchend',up);
+  // restore last corner + min state
+  const savedCorner=localStorage.getItem(pip.id+'_corner');
+  const defCorner=pip.id==='telempip'?'tr':'bl';
+  if(localStorage.getItem(pip.id+'_min')==='1') pip.classList.add('min');
+  setTimeout(()=>snapPip(pip,savedCorner||defCorner,false),50);
+}
+function initPips(){ makePipDraggable(document.getElementById('platepip'));
+  makePipDraggable(document.getElementById('telempip'));
+  refreshPlate(); }
+// re-snap on resize
+let _rsz; window.addEventListener('resize',()=>{ clearTimeout(_rsz); _rsz=setTimeout(()=>{
+  ['platepip','telempip'].forEach(id=>{ const pip=document.getElementById(id); if(pip&&!pip.classList.contains('full'))
+    snapPip(pip,localStorage.getItem(id+'_corner')||(id==='telempip'?'tr':'bl'),false); }); },150); });
+
+// Telemetry controls
+window.telemMin=(e)=>{ e.stopPropagation(); const pip=document.getElementById('telempip');
+  pip.classList.toggle('min'); localStorage.setItem('telempip_min',pip.classList.contains('min')?'1':'0');
+  snapPip(pip,localStorage.getItem('telempip_corner')||'tr',true); };
+
+// Plate controls
+window.plateMin=(e)=>{ e.stopPropagation(); const pip=document.getElementById('platepip'); pip.classList.remove('full');
+  pip.classList.toggle('min'); if(pip.classList.contains('min'))pip.classList.remove('open');
+  localStorage.setItem('platepip_min',pip.classList.contains('min')?'1':'0');
+  snapPip(pip,localStorage.getItem('platepip_corner')||'bl',true); setTimeout(pResize,260); };
+window.plateFull=(e)=>{ e.stopPropagation(); const pip=document.getElementById('platepip');
+  const on=pip.classList.toggle('full'); document.getElementById('plateFullBtn').textContent=on?'⤡':'⛶';
+  if(on)pip.classList.add('open'); else snapPip(pip,localStorage.getItem('platepip_corner')||'bl',false);
+  setTimeout(pResize,260); };
+window.plateToggleBody=(e)=>{ e.stopPropagation(); const pip=document.getElementById('platepip');
+  pip.classList.remove('min'); pip.classList.toggle('open');
+  snapPip(pip,localStorage.getItem('platepip_corner')||'bl',true); };
+
+// ── dock collapse/expand ────────────────────────────────────────────────
+window.toggleDock=()=>{ const d=document.getElementById('dock'); const g=document.getElementById('dockGrip');
+  const mob=window.matchMedia('(max-width:760px)').matches;
+  if(mob){
+    // cycle sheet size: default → half → full → collapsed(peek) → default …
+    const order=['','half','full','collapsed'];
+    const cur=['half','full','collapsed'].find(c=>d.classList.contains(c))||'';
+    const next=order[(order.indexOf(cur)+1)%order.length];
+    d.classList.remove('half','full','collapsed'); if(next) d.classList.add(next);
+    // re-snap floating pips above the new sheet height
+    setTimeout(()=>['platepip','telempip'].forEach(id=>{const pip=document.getElementById(id);
+      if(pip&&!pip.classList.contains('full')) snapPip(pip,localStorage.getItem(id+'_corner')||(id==='telempip'?'tr':'bl'),true);}),330);
+    return;
+  }
+  d.classList.toggle('collapsed'); g.textContent=d.classList.contains('collapsed')?'⌃':'⌄'; };
+
+// ── dock finger-drag (mobile): drag the grip to fluidly resize the chat sheet ──
+function setupDockDrag(){
+  const d=document.getElementById('dock'), g=document.getElementById('dockGrip');
+  if(!d||!g) return;
+  // snap heights (px) computed from viewport; matches the CSS classes
+  function snapHeights(){ const H=window.innerHeight;
+    return [ {cls:'collapsed', px:84}, {cls:'', px:Math.round(H*0.44)},
+             {cls:'half', px:Math.round(H*0.70)}, {cls:'full', px:H-52} ]; }
+  function applyCls(cls){ d.classList.remove('half','full','collapsed'); if(cls) d.classList.add(cls);
+    // re-snap floating pips above the new sheet height
+    setTimeout(()=>['platepip','telempip'].forEach(id=>{const pip=document.getElementById(id);
+      if(pip&&!pip.classList.contains('full')) snapPip(pip,localStorage.getItem(id+'_corner')||(id==='telempip'?'tr':'bl'),true);}),320); }
+  let dragging=false, startY=0, startH=0, curH=0, moved=false;
+  function pt(e){ return e.touches?e.touches[0]:e; }
+  function down(e){ const mob=window.matchMedia('(max-width:760px)').matches; if(!mob) return;
+    dragging=true; moved=false; const t=pt(e); startY=t.clientY;
+    startH=d.getBoundingClientRect().height; curH=startH;
+    d.classList.add('dockdragging'); e.preventDefault(); }
+  function move(e){ if(!dragging) return; const t=pt(e);
+    const dy=startY-t.clientY;                 // drag up = grow
+    if(Math.abs(dy)>4) moved=true;
+    const H=window.innerHeight;
+    curH=Math.max(60, Math.min(H-40, startH+dy));
+    d.style.height=curH+'px'; e.preventDefault(); }
+  let _lastTap=0;
+  function up(){ if(!dragging) return; dragging=false; d.classList.remove('dockdragging');
+    if(!moved){ d.style.height='';
+      const now=Date.now();
+      if(now-_lastTap<300){ // double-tap → jump full <-> default
+        _lastTap=0;
+        if(d.classList.contains('full')) applyCls('');
+        else applyCls('full');
+      } else { _lastTap=now; window.toggleDock(); }
+      return; }  // treat as tap → cycle
+    // snap to nearest defined height
+    const hs=snapHeights(); let best=hs[0], bd=1e9;
+    hs.forEach(o=>{ const dd=Math.abs(o.px-curH); if(dd<bd){bd=dd;best=o;} });
+    d.style.height=''; applyCls(best.cls); }
+  g.addEventListener('touchstart',down,{passive:false}); window.addEventListener('touchmove',move,{passive:false}); window.addEventListener('touchend',up);
+  g.addEventListener('mousedown',down); window.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+  // desktop: grip is a simple collapse toggle (no sheet drag there)
+  g.addEventListener('click',()=>{ const mob=window.matchMedia('(max-width:760px)').matches; if(!mob) window.toggleDock(); });
+  window.__dockDraggable=true;
+}
+setupDockDrag();
+
+// ── boot ─────────────────────────────────────────────────────────────
+checkAuth();
+</script>
+</body>
+</html>

@@ -35,3 +35,7 @@ site/
 
 # stray slicer artifact
 result.json
+# the dashboard SPA: source is built on the Mac, dist is COMMITTED (Thor has no node; the wheel ships it)
+strands_cad/dashboard/frontend/node_modules/
+strands_cad/dashboard/frontend/tsconfig.tsbuildinfo
+!strands_cad/dashboard/frontend/dist/
