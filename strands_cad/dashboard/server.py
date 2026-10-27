@@ -59,6 +59,8 @@ from strands_cad.dashboard import realtime as _realtime
 from strands_cad.dashboard import plate as _plate
 from strands_cad.dashboard import telegram as _telegram
 from strands_cad.dashboard import thinker as _thinker
+from strands_cad.dashboard import gates as _gates
+from strands_cad.dashboard import pipeline as _pipeline
 
 HERE = Path(__file__).resolve().parent
 FRONTEND = HERE / "frontend"
@@ -233,7 +235,13 @@ async def telemetry():
         return JSONResponse({"error": "printer not configured (BAMBU_IP/ACCESS_CODE)"},
                             status_code=503)
     p = _printer.get_printer(ip, access, serial)
-    return p.snapshot()
+    snap = p.snapshot()
+    # flat keys for tiny's endpoint panel (it draws top-level scalars); nested shape stays for the SPA
+    t = snap.get("temps") or {}
+    snap.update({"job": snap.get("subtask_name") or ("idle" if snap.get("connected") else None),
+                 "state": snap.get("gcode_state"), "progress_pct": snap.get("progress"),
+                 "nozzle_c": t.get("nozzle"), "bed_c": t.get("bed"), "chamber_c": t.get("chamber")})
+    return snap
 
 
 @app.post("/api/control")
@@ -338,11 +346,41 @@ async def chat_status():
 
 @app.post("/api/chat")
 async def chat_post(request: Request):
+    """One-shot turn: {result, reply, error, tools, gates, preview} — the shape tiny's endpoint proxy and
+    Telegram expect (fomo's endpoint.py contract: result/tools/errors). A print request ends with a gate
+    the operator answers on the dashboard; the reply says so and carries the preview URL."""
     body = await request.json()
     prompt = (body.get("prompt") or body.get("message") or "").strip()
     if not prompt:
         raise HTTPException(400, "empty prompt")
-    return await asyncio.to_thread(_chat.ask, prompt)
+    res = await asyncio.to_thread(_chat.ask, prompt)
+    res["errors"] = [res["error"]] if res.get("error") else []
+    return res
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(request: Request):
+    """The same turn as SSE: frames text{delta} · tool{id,name,input} · tool_result{id,status,text,image?} ·
+    gate{id,kind,detail,preview,timeout_s | approve,answered} · done · error (expo's vocabulary)."""
+    body = await request.json()
+    prompt = (body.get("prompt") or body.get("message") or "").strip()
+    if not prompt:
+        raise HTTPException(400, "empty prompt")
+
+    async def gen():
+        import json as _json
+        it = _chat.ask_stream(prompt)
+        while True:
+            frame = await asyncio.to_thread(next, it, None)
+            if frame is None:
+                break
+            if frame.get("type") == "ping":
+                yield ": keepalive\n\n"
+                continue
+            yield f"data: {_json.dumps(frame, default=str)}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
 
 @app.post("/api/chat/reset")
@@ -373,9 +411,63 @@ async def print_start(request: Request):
     name = body.get("name", "")
     if not name:
         raise HTTPException(400, "name required")
+    # NOT a direct start any more: the job opens an operator gate and prints only after approval.
     jid = _jobs.start_print(name, use_ams=bool(body.get("use_ams", True)),
-                            plate_index=int(body.get("plate_index", 1)))
-    return {"job_id": jid}
+                            plate_index=int(body.get("plate_index", 1)), requested_by="dashboard /api/print")
+    return {"job_id": jid, "gated": True}
+
+
+# ── prompt-to-print pipeline + operator gates ───────────────────────────────
+@app.post("/api/pipeline")
+async def pipeline_start(request: Request):
+    """validate → preview → slice → GATE → print for a workdir model. Returns {job_id} at once; poll /api/job/{id}."""
+    body = await request.json()
+    model = (body.get("model") or body.get("name") or "").strip()
+    if not model:
+        raise HTTPException(400, "model required (a file in the workdir)")
+    r = _pipeline.start(model=model, profile=body.get("profile", ""), title=body.get("title", ""),
+                        requested_by=body.get("requested_by") or "dashboard")
+    if r.get("error"):
+        raise HTTPException(400, r["error"])
+    return r
+
+
+@app.get("/api/gates")
+async def gates_list():
+    return {"gates": _gates.recent(), "pending": _gates.pending()}
+
+
+@app.get("/api/gate/{gid}")
+async def gate_get(gid: str):
+    g = _gates.get(gid)
+    if not g:
+        raise HTTPException(404, "gate not found")
+    return g
+
+
+@app.post("/api/gate/{gid}")
+async def gate_answer(request: Request, gid: str):
+    """The operator's decision. Only a human session may approve: service tokens (tiny's device path) are
+    refused unless STRANDS_CAD_GATE_FROM_DEVICE=1 — the dashboard is the default and only approver."""
+    body = await request.json()
+    approve = bool(body.get("approve"))
+    who = "dashboard"
+    if _auth.AUTH_ENABLED:
+        try:
+            claims = _auth.require_auth(request)
+            sub = str(claims.get("sub", ""))
+            if sub.startswith("service:"):
+                if approve and os.getenv("STRANDS_CAD_GATE_FROM_DEVICE", "").lower() not in ("1", "true", "yes"):
+                    raise HTTPException(403, "a service token cannot approve a print — approve on the dashboard")
+                who = sub
+            else:
+                who = claims.get("name") or "passkey"
+        except HTTPException:
+            raise
+    r = _gates.answer(gid, approve, by=who)
+    if not r.get("ok"):
+        raise HTTPException(404, r.get("error", "gate not found"))
+    return r
 
 
 @app.get("/api/job/{jid}")
@@ -527,19 +619,14 @@ async def plate_export():
 
 @app.post("/api/plate/print")
 async def plate_print(request: Request):
-    """Export the colored plate → slice → upload → START print (agent can call)."""
-    b = {}
-    try: b = await request.json()
-    except Exception: pass
+    """Export the colored plate → the gated pipeline (slice → GATE → print)."""
     exp = _plate.export_3mf()
     if not exp.get("ok"):
-        return JSONResponse({"error": exp.get("error", "export failed")}, status_code=400)
-    # slice then (optionally) auto upload+print the exported colored 3mf
-    auto = bool(b.get("auto_print", True))
-    jid = _jobs.start_slice(exp["rel"], then_print=auto,
-                            use_ams=bool(b.get("use_ams", True)))
-    return {"job_id": jid, "exported": exp["rel"], "then": "print",
-            "auto_print": auto}
+        raise HTTPException(400, exp.get("error", "export failed"))
+    r = _pipeline.start(model=exp["rel"], title="colored plate", requested_by="dashboard plate")
+    if r.get("error"):
+        raise HTTPException(400, r["error"])
+    return {**r, "exported": exp, "gated": True}
 
 
 # ── telegram bridge ─────────────────────────────────────────────────────────
@@ -601,6 +688,14 @@ async def _autostart_bg():
     # OWN processes; set STRANDS_CAD_SPLIT_LOOPS=1 so the dashboard doesn't
     # also start them (which would double-poll Telegram getUpdates).
     _split = os.getenv("STRANDS_CAD_SPLIT_LOOPS", "").lower() in ("1", "true", "yes")
+    # start the MQTT poller now so the chat agent's LIVE COCKPIT STATE (and tiny's device chat) has a
+    # snapshot from the first turn — before, it only existed after someone hit /api/telemetry
+    try:
+        ip, access, serial = _creds()
+        if ip and access:
+            _printer.get_printer(ip, access, serial)
+    except Exception as e:
+        log.warning(f"printer autostart failed: {e}")
     # telegram command poll loop (accepts /status /snapshot /ask ... from operator)
     if _split or os.getenv("STRANDS_CAD_NO_TELEGRAM", "").lower() in ("1", "true", "yes"):
         log.info("📱 telegram autostart skipped (split-loops / disabled)")
@@ -619,6 +714,13 @@ async def _autostart_bg():
             log.info(f"🧠 thinker autostart: {r}")
         except Exception as e:
             log.warning(f"thinker autostart failed: {e}")
+
+
+@app.on_event("shutdown")
+async def _deny_open_gates():
+    n = _gates.deny_all(by="shutdown")
+    if n:
+        log.info(f"🔒 denied {n} open gate(s) on shutdown")
 
 
 # ── static frontend ────────────────────────────────────────────────────────

@@ -16,6 +16,7 @@ PRINTERS = {
     "A1":       [256, 256, 256],
     "A1_MINI":  [180, 180, 180],
     "H2D":      [350, 320, 325],
+    "X2D":      [325, 320, 325],   # Bambu Lab X2D: single-nozzle region (dual-nozzle zone is 300 wide)
     "MK4":      [250, 210, 220],
     "ENDER3":   [220, 220, 250],
 }
@@ -56,7 +57,7 @@ def stl_printability(
 
     Args:
         stl_file: Path to .stl file.
-        printer: Printer preset — one of: X1C, P1S, P1P, A1, A1_MINI, H2D, MK4, ENDER3.
+        printer: Printer preset — one of: X1C, P1S, P1P, A1, A1_MINI, H2D, X2D, MK4, ENDER3.
         max_overhang_deg: Max printable overhang angle from vertical (default 45°).
         build_volume: Override [x, y, z] build volume in mm (ignores printer preset).
 
