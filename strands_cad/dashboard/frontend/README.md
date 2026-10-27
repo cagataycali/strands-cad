@@ -18,4 +18,5 @@ publicly (hashed static files, no data); every `/api/*` route except `health`/`v
 Screens: AuthGate (passkeys) → Cockpit: chamber camera hero (MJPEG with a 60 s camera ticket), state strip
 (progress · job · layer · remaining · temps · AMS · pause/stop with a confirm), the agent dock (streamed turns,
 tool receipts, gate cards). Drawers: Models (three.js STL preview → "Print this (asks first)"), Jobs, Settings.
-`legacy.html` is the pre-revamp single-file UI, served only when `dist/` is missing.
+The pre-revamp single-file UI (1,213 lines, draggable PiPs, plate editor, filament palette) was removed in favour of this
+SPA once the gated pipeline landed; the plate/filament APIs and agent tools still exist for the agent's use.

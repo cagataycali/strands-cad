@@ -726,8 +726,8 @@ async def _deny_open_gates():
 # ── static frontend ────────────────────────────────────────────────────────
 # The cockpit is a Vite + React SPA (frontend/src → frontend/dist, committed). Hashed assets are mounted
 # publicly (they carry no data); the HTML shell is public too so the passkey gate can render — every
-# /api route behind it is still sealed by the middleware. Without a dist (source checkout, no build) the
-# legacy single-file index.html is served if present, else a pointer to the build command.
+# /api route behind it is still sealed by the middleware. Without a dist (source checkout, no build)
+# the page points at the build command.
 if (DIST / "assets").is_dir():
     app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")
 for _static in ("fonts", "icons"):
@@ -740,9 +740,6 @@ async def index():
     idx = DIST / "index.html"
     if idx.exists():
         return FileResponse(idx, media_type="text/html", headers={"Cache-Control": "no-cache"})
-    legacy = FRONTEND / "legacy.html"   # the pre-revamp single-file UI; removed once the pipeline lands
-    if legacy.exists():
-        return HTMLResponse(legacy.read_text(encoding="utf-8"))
     return HTMLResponse("<h1>strands-cad dashboard</h1><p>frontend not built: "
                         "<code>cd strands_cad/dashboard/frontend && npm ci && npm run build</code></p>")
 
