@@ -256,6 +256,17 @@ async def control(request: Request):
     return {"ok": True, "action": action}
 
 
+@app.post("/api/stop")
+async def stop_print():
+    """The tiny device contract's `stop`: stop the running print. Safe direction only — nothing here starts one."""
+    ip, access, serial = _creds()
+    p = _printer.get_printer(ip, access, serial)
+    ok = p.control("stop")
+    if not ok:
+        raise HTTPException(503, "printer not connected — stop not sent")
+    return {"ok": True, "action": "stop"}
+
+
 # ── camera ─────────────────────────────────────────────────────────────────
 @app.get("/api/camera/status")
 async def camera_status():

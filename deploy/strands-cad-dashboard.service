@@ -9,7 +9,11 @@ Type=simple
 WorkingDirectory=@INSTALL_DIR@
 EnvironmentFile=-@INSTALL_DIR@/.env
 Environment=STRANDS_CAD_SPLIT_LOOPS=1
-ExecStart=@VENV@/bin/strands-cad-dashboard --no-auth
+# Passkeys ON by default: a printer heats and moves, and this port is usually behind a public tunnel.
+# To run without auth on a trusted LAN set STRANDS_CAD_DASHBOARD_ARGS=--no-auth in .env (explicit, never the default).
+# Behind a tunnel also set STRANDS_CAD_AUTH_RP_ID=<host> and STRANDS_CAD_AUTH_ORIGIN=https://<host> in .env.
+Environment=STRANDS_CAD_DASHBOARD_ARGS=
+ExecStart=@VENV@/bin/strands-cad-dashboard $STRANDS_CAD_DASHBOARD_ARGS
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

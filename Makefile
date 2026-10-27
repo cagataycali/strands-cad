@@ -16,6 +16,7 @@ ABS_ENV  := $(CURDIR)/.env
 USER_ID  := $(shell id -un)
 
 DASH_PORT ?= 8099
+DASH_ARGS ?=
 
 .PHONY: help
 help: ## show this menu
@@ -36,9 +37,9 @@ $(VENV)/.installed: pyproject.toml
 
 .PHONY: run dashboard
 run: dashboard ## alias for 'dashboard'
-dashboard: install ## start the dashboard (:$(DASH_PORT)) — runs thinker+telegram in-process
+dashboard: install ## start the dashboard (:$(DASH_PORT)) — runs thinker+telegram in-process; passkeys ON (DASH_ARGS=--no-auth to disable)
 	@echo "🖥️  dashboard → http://localhost:$(DASH_PORT)"
-	@set -a; [ -f .env ] && . ./.env; set +a; $(ABS_VENV)/bin/strands-cad-dashboard --no-auth
+	@set -a; [ -f .env ] && . ./.env; set +a; $(ABS_VENV)/bin/strands-cad-dashboard $(DASH_ARGS)
 
 .PHONY: thinker
 thinker: install ## start ONLY the slow-thinker loop (standalone)

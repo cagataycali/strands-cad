@@ -1,0 +1,21 @@
+{
+  "slug": "printer",
+  "name": "3D printer",
+  "platform": "bambu-x2d",
+  "capabilities": ["chat", "telemetry", "camera", "print", "cad", "stop"],
+  "endpoint": {
+    "url": { "env": "STRANDS_CAD_PUBLIC_URL", "dotenv": [{ "path": ".env", "key": "STRANDS_CAD_PUBLIC_URL" }], "default": "https://printer.cagatay.my", "note": "the dashboard's public https origin (the cloudflared tunnel in front of strands-cad-dashboard :8099)" },
+    "secret": [
+      { "kind": "env", "name": "STRANDS_CAD_TINY_TOKEN", "note": "a long-lived service JWT minted by the dashboard's auth store (scope session, sub service:tiny)" },
+      { "kind": "exec", "argv": ["python", "-m", "strands_cad.dashboard.auth", "service-token", "--name", "tiny"], "note": "prints (and caches in .strands_cad_auth.json) the service token — run in the dashboard's checkout/venv on the host" }
+    ],
+    "name": "3D printer",
+    "contract": {
+      "chat": "POST /api/chat {prompt} → {result, reply, tools[], errors[], gates[], preview}; a print request ends at an OPERATOR GATE the owner answers on the dashboard — the reply says so and carries the preview URL (80 s budget)",
+      "telemetry": "GET /api/telemetry → nested snapshot + flat keys job/state/progress_pct/remaining_min/nozzle_c/bed_c/chamber_c (MQTT cache, instant)",
+      "snapshot": "GET /api/camera/snapshot → one image/jpeg from the chamber camera",
+      "stop": "POST /api/stop → stops the running print (safe direction; never starts one)",
+      "gate": "POST /api/gate/{id} {approve:false} may be sent with the service token (deny only); approving needs a passkey session on https://printer.cagatay.my"
+    }
+  }
+}

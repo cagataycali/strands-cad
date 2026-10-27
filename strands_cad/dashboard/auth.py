@@ -564,3 +564,35 @@ def status(request=None) -> Dict[str, Any]:
         except Exception:
             pass
     return out
+
+
+# ── CLI: `python -m strands_cad.dashboard.auth service-token --name tiny` ───────
+def main(argv=None) -> int:
+    """Print a long-lived service token (the secret a tiny.technology endpoint device row stores).
+
+    Runs against the SAME auth store the dashboard uses (STRANDS_CAD_AUTH_STORE / ./.strands_cad_auth.json),
+    so run it in the dashboard's checkout on the host. The token is cached under 'service_tokens'
+    and reused on later calls until the store's jwt_secret rotates.
+    """
+    import argparse
+    ap = argparse.ArgumentParser(prog="strands_cad.dashboard.auth")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    st = sub.add_parser("service-token", help="print the service token for a named machine caller")
+    st.add_argument("--name", default="tiny")
+    rv = sub.add_parser("revoke-service-token", help="drop a named service token from the store (bookkeeping; rotate the secret for hard revocation)")
+    rv.add_argument("--name", required=True)
+    sub.add_parser("status", help="credentials + service token names in the store")
+    args = ap.parse_args(argv)
+    if args.cmd == "service-token":
+        print(service_token(args.name))
+    elif args.cmd == "revoke-service-token":
+        print("revoked" if revoke_service_token(args.name) else "no such token")
+    else:
+        store = _load()
+        print({"credentials": [c.get("name") for c in store.get("credentials", [])],
+               "service_tokens": sorted((store.get("service_tokens") or {}).keys()), "store": str(AUTH_STORE)})
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

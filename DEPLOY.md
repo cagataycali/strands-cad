@@ -90,3 +90,37 @@ TELEGRAM_CHAT_ID=...
 THINKER_INTERVAL=60
 STRANDS_CAD_SLICER=/home/you/.local/share/OrcaSlicer/bin/orca-slicer
 ```
+
+
+## Auth is ON by default (2026-10-27)
+
+`deploy/strands-cad-dashboard.service` and `make dashboard` used to start the cockpit with `--no-auth`.
+They no longer do: `make persist` renders a unit that runs `strands-cad-dashboard $STRANDS_CAD_DASHBOARD_ARGS`
+with the variable empty, so passkeys are required. Disabling auth is an explicit choice — put
+`STRANDS_CAD_DASHBOARD_ARGS=--no-auth` in `.env` (LAN-only, never behind a public tunnel).
+
+Behind a tunnel (e.g. https://printer.cagatay.my) also set in `.env`:
+
+```
+STRANDS_CAD_AUTH_RP_ID=printer.cagatay.my
+STRANDS_CAD_AUTH_ORIGIN=https://printer.cagatay.my,http://localhost:8099
+STRANDS_CAD_AUTH_BOOTSTRAP=<random>      # required for the FIRST passkey enrollment, then remove it
+```
+
+### tiny.technology device (tiny.body.json)
+
+The dashboard is a tiny endpoint device (`platform bambu-x2d`). tiny dials `POST /api/chat`, `GET /api/telemetry`,
+`GET /api/camera/snapshot`, `POST /api/stop` with a bearer = the service token:
+
+```
+cd ~/strands-cad && .venv/bin/python -m strands_cad.dashboard.auth service-token --name tiny
+```
+
+A print asked for through tiny ends at the **operator gate**: the reply names the model, carries the preview URL and
+says it is waiting for approval on the dashboard. The service token may deny a gate but never approve one
+(`STRANDS_CAD_GATE_FROM_DEVICE=1` opts in; default off).
+
+### Updating the UI
+
+The cockpit is a Vite + React SPA; `strands_cad/dashboard/frontend/dist/` is committed (the host needs no node).
+After `git pull` + `pip install -e ".[dashboard]"` + `systemctl --user restart strands-cad.target` the new UI is live.
