@@ -39,7 +39,7 @@ def _mqtt_client(ip: str, access_code: str, serial: str):
     except ImportError:
         raise RuntimeError("paho-mqtt not installed. Install with: pip install 'strands-cad[bambu]'")
 
-    client = mqtt.Client(client_id=f"strands-cad-{serial}", protocol=mqtt.MQTTv311)
+    client = mqtt.Client(client_id=f"strands-cad-{serial}-{os.getpid()}", protocol=mqtt.MQTTv311)  # per process: a shared id gets bounced by the broker
     client.username_pw_set("bblp", access_code)
     client.tls_set(cert_reqs=ssl.CERT_NONE, tls_version=ssl.PROTOCOL_TLSv1_2)
     client.tls_insecure_set(True)

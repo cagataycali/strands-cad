@@ -27,8 +27,9 @@ Env
 from __future__ import annotations
 
 import json
-import logging
 import os
+import secrets
+import logging
 import ssl
 import threading
 import time
@@ -39,6 +40,13 @@ log = logging.getLogger("strands_cad.dashboard.printer")
 WATCHDOG_INTERVAL = float(os.getenv("BAMBU_WATCHDOG_INTERVAL", "20"))
 STALE_PUSHALL_S = float(os.getenv("BAMBU_STALE_PUSHALL_S", "120"))
 STALE_RECONNECT_S = float(os.getenv("BAMBU_STALE_RECONNECT_S", "300"))
+
+
+def _client_id() -> str:
+    """Unique per process AND per connection. The dashboard, the thinker and the telegram bridge each run their
+    own poller; a shared id (the old `strands-cad-dash-<epoch>`, identical when systemd starts them in the same
+    second) makes the printer's broker bounce the clients against each other every few seconds (rc=7)."""
+    return f"strands-cad-dash-{os.getpid()}-{secrets.token_hex(3)}"
 
 
 class BambuPrinter:
@@ -82,12 +90,12 @@ class BambuPrinter:
             return False
 
         try:
-            client = mqtt.Client(client_id=f"strands-cad-dash-{int(time.time())}",
+            client = mqtt.Client(client_id=_client_id(),
                                  protocol=mqtt.MQTTv311)
         except Exception:
             # paho 2.x callback API
             client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1,
-                                 client_id=f"strands-cad-dash-{int(time.time())}")
+                                 client_id=_client_id())
         client.username_pw_set("bblp", self.access)
         client.tls_set(cert_reqs=ssl.CERT_NONE, tls_version=ssl.PROTOCOL_TLSv1_2)
         client.tls_insecure_set(True)
